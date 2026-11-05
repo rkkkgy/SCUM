@@ -1,0 +1,11 @@
+{
+  "name": "scum-online-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SCUM 1199 服在线排查与数据监控",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  }
+}

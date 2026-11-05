@@ -4,14 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { CONFIG as CFG } from './lib/config.mjs';
-import { Monitor, clampInterval, acquireLock, releaseLock } from './lib/monitor.mjs';
+import { parseArgs } from './lib/args.mjs';
+import { Monitor, acquireLock, releaseLock, MIN_INTERVAL_SEC, MAX_INTERVAL_SEC } from './lib/monitor.mjs';
+import { buildEventsCsv, eventsCsvFilename, isValidDateParam, readEvents } from './lib/export.mjs';
 
-const args = Object.fromEntries(
-  process.argv.slice(2).map((a) => {
-    const m = a.match(/^--([^=]+)(?:=(.*))?$/);
-    return m ? [m[1], m[2] ?? true] : [a, true];
-  }),
-);
+const args = parseArgs();
 const PORT = Number(args.port || 8788);
 const OPEN = Boolean(args.open);
 
@@ -30,9 +27,9 @@ const log = (...a) => console.log(`[${new Date().toLocaleTimeString('zh-CN', { h
 
 monitor.onPoll = (r) => {
   if (!r.ok) return log('刷新失败:', r.error);
-  if (r.skipped) return log('距上次判定不足 1 分钟，本次仅更新数据，不改变在线状态');
+  if (r.skipped) return log('距上次判定不足 61 秒，本次仅更新数据，不改变在线状态');
   const s = monitor.status();
-  log(`刷新完成：榜上 ${s.counts.total} 人，判定在线 ${s.counts.online} 人`);
+  log(`刷新完成：榜上 ${s.counts.total} 人，判定在线 ${s.counts.strictOnline} 人，新上榜 ${s.counts.new} 人`);
 };
 
 function json(res, code, obj) {
@@ -82,10 +79,21 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/status') return json(res, 200, monitor.status());
 
     if (p === '/api/config' && req.method === 'POST') {
-      const body = await readBody(req);
-      const sec = clampInterval(body.intervalSec);
-      monitor.setInterval(sec);
-      log(`刷新频率已改为 ${sec} 秒`);
+      let body;
+      try {
+        body = await readBody(req);
+      } catch (e) {
+        return json(res, 400, { ok: false, error: e.message });
+      }
+      const sec = Number(body.intervalSec);
+      if (!Number.isFinite(sec) || sec < MIN_INTERVAL_SEC || sec > MAX_INTERVAL_SEC) {
+        return json(res, 400, {
+          ok: false,
+          error: `检测频率需在 ${MIN_INTERVAL_SEC}–${MAX_INTERVAL_SEC} 秒之间（榜单按分钟统计）`,
+        });
+      }
+      monitor.setInterval(Math.round(sec));
+      log(`刷新频率已改为 ${monitor.intervalSec} 秒`);
       return json(res, 200, { ok: true, intervalSec: monitor.intervalSec, status: monitor.status() });
     }
 
@@ -109,41 +117,23 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/export/events.csv') {
       const date = url.searchParams.get('date') || monitor.status().date;
-      const file = path.join(CFG.dataDir, `events-${date}.jsonl`);
-      const rows = fs.existsSync(file)
-        ? fs
-            .readFileSync(file, 'utf8')
-            .trim()
-            .split('\n')
-            .filter(Boolean)
-            .map((l) => JSON.parse(l))
-        : [];
-      const label = { online: '上线', offline: '下线', new: '新上榜' };
-      const catLabel = { online: '在线', kill: '击杀', unlock: '开锁', rank: '榜单', risk: '风控', system: '系统' };
-      const head = '时间,类别,玩家,事件,说明\n';
-      const body = rows
-        .map((e) =>
-          [
-            e.at,
-            catLabel[e.category || 'online'] || '在线',
-            e.nickname || '',
-            (e.title || label[e.type] || e.type || '').replace(/,/g, '，'),
-            String(e.detail || '').replace(/,/g, '，'),
-          ].join(','),
-        )
-        .join('\n');
+      if (!isValidDateParam(date)) {
+        return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      }
+      const csv = buildEventsCsv(readEvents(CFG.dataDir, date));
       res.writeHead(200, {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="scum-events-${date}.csv"`,
+        'Content-Disposition': `attachment; filename="${eventsCsvFilename(date)}"`,
       });
-      return res.end('\ufeff' + head + body);
+      return res.end(csv);
     }
 
     // 静态文件兜底（仅限 public 目录）
     const safe = path.normalize(p).replace(/^([/\\])+/, '');
     const pubDir = path.join(import.meta.dirname, 'public');
     const file = path.join(pubDir, safe);
-    if (file.startsWith(pubDir) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+    const rel = path.relative(pubDir, file);
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel) && fs.existsSync(file) && fs.statSync(file).isFile()) {
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
       return res.end(fs.readFileSync(file));
     }
