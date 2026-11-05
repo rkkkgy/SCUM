@@ -33,9 +33,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .card b{display:block;font-size:26px;line-height:1.25;color:var(--blue)}
 .card.green b{color:var(--green)}
 .card span{color:var(--muted);font-size:12px}
-.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+.grid{display:grid;grid-template-columns:1.45fr 1fr;gap:16px;align-items:start}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
-.panel h2{font-size:13.5px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);color:#b9c2d4;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.panel h2{font-size:13.5px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);color:#b9c2d4;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .panel h2 em{font-style:normal;color:var(--muted);font-size:12px;font-weight:400}
 table{width:100%;border-collapse:collapse}
 th,td{padding:8px 14px;text-align:left;border-bottom:1px solid #1c2230;font-size:13px}
@@ -50,11 +50,22 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
 .name{display:flex;align-items:center;gap:8px}
 .name i{width:7px;height:7px;border-radius:50%;background:#3a4357;display:inline-block}
 .name i.on{background:var(--green);box-shadow:0 0 6px rgba(74,222,128,.8)}
-.events{max-height:520px;overflow:auto}
-.ev{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #1c2230;font-size:12.5px;align-items:center}
+/* 事件面板 */
+.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-bottom:1px solid #1c2230}
+.tab{font-size:12px;padding:3px 10px;border-radius:999px;background:#171d29;color:#93a0b8;cursor:pointer;border:1px solid #222a3a;user-select:none;transition:.15s}
+.tab:hover{background:#1e2735}
+.tab.active{background:#1d4ed8;border-color:#2563eb;color:#fff}
+.tab .n{opacity:.65;margin-left:4px;font-variant-numeric:tabular-nums}
+.events{max-height:620px;overflow:auto}
+.ev{display:flex;gap:9px;padding:9px 14px;border-bottom:1px solid #1a2029;font-size:12.5px;align-items:flex-start}
 .ev:last-child{border:none}
-.ev time{color:#6f7a90;font-variant-numeric:tabular-nums;flex:none}
-.ev .who{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev .dotm{width:7px;height:7px;border-radius:50%;margin-top:7px;flex:none;background:#3a4357}
+.ev .txt{flex:1;min-width:0}
+.ev .t1{color:#dfe5f1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev .t2{color:#6f7a90;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev time{color:#657089;font-variant-numeric:tabular-nums;flex:none;font-size:11.5px;margin-top:2px}
+.c-online{background:var(--green)} .c-kill{background:#fb7185} .c-unlock{background:var(--blue)}
+.c-rank{background:var(--amber)} .c-risk{background:var(--red)} .c-system{background:#94a3b8}
 .empty{padding:22px 16px;color:var(--muted);font-size:13px;text-align:center}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);background:#1f2634;border:1px solid #33405a;color:#dfe5f1;padding:9px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.25s}
 .toast.show{opacity:1;transform:translateX(-50%)}
@@ -98,7 +109,8 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
       <section class="panel">
         <h2>在线 <em>今日累计时长在增长</em></h2>
         <table>
-          <thead><tr><th style="width:38%">玩家</th><th>今日在线</th><th>本区间增长<br><span style="font-weight:400;color:#6f7a90">（分钟）</span></th><th>状态</th></tr></thead>          <tbody id="onlineBody"><tr><td colspan="4" class="empty">等待第一次刷新…</td></tr></tbody>
+          <thead><tr><th style="width:38%">玩家</th><th>今日在线</th><th>本区间增长<br><span style="font-weight:400;color:#6f7a90">（分钟）</span></th><th>状态</th></tr></thead>
+          <tbody id="onlineBody"><tr><td colspan="4" class="empty">等待第一次刷新…</td></tr></tbody>
         </table>
       </section>
 
@@ -112,7 +124,8 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
     </div>
 
     <aside class="panel">
-      <h2>最近事件</h2>
+      <h2>最近事件 <em id="evSummary"></em></h2>
+      <div class="tabs" id="evTabs"></div>
       <div class="events" id="events"><div class="empty">暂无</div></div>
     </aside>
   </div>
@@ -124,6 +137,17 @@ const $ = (id) => document.getElementById(id);
 let offset = 0;        // 服务器时间 - 本地时间
 let last = null;
 let busy = false;
+let tab = 'all';
+
+const CATS = [
+  { id: 'all', label: '全部' },
+  { id: 'online', label: '在线' },
+  { id: 'kill', label: '击杀' },
+  { id: 'unlock', label: '开锁' },
+  { id: 'rank', label: '榜单' },
+  { id: 'risk', label: '风控' },
+  { id: 'system', label: '系统' },
+];
 
 function fmtDur(sec){
   sec = Math.max(0, Math.round(sec||0));
@@ -139,6 +163,15 @@ function fmtDelta(minutes){
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const clock = (iso) => iso ? new Date(iso).toLocaleTimeString('zh-CN', {hour12:false}) : '—';
+function evTime(at){
+  if (!at) return '';
+  const s = String(at);
+  const m = s.match(/^\d{4}-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  if (!m) return s.slice(0,8);
+  const today = new Date();
+  const sameDay = String(today.getMonth()+1).padStart(2,'0') === m[1] && String(today.getDate()).padStart(2,'0') === m[2];
+  return sameDay ? m[3] : `${m[1]}-${m[2]} ${m[3]}`;
+}
 
 function toast(msg, err){
   const t = $('toast');
@@ -146,6 +179,37 @@ function toast(msg, err){
   t.className = 'toast show' + (err ? ' err' : '');
   clearTimeout(t._t);
   t._t = setTimeout(() => t.className = 'toast', 2600);
+}
+
+function renderTabs(counts, total){
+  const html = CATS.map(c => {
+    const n = c.id === 'all' ? total : (counts[c.id] || 0);
+    return `<span class="tab ${tab===c.id?'active':''}" data-tab="${c.id}">${c.label}<span class="n">${n}</span></span>`;
+  }).join('');
+  $('evTabs').innerHTML = html;
+  $('evTabs').querySelectorAll('.tab').forEach(el => {
+    el.onclick = () => { tab = el.dataset.tab; render(last); };
+  });
+}
+
+function renderEvents(s){
+  const evs = s.events || [];
+  const counts = {};
+  for (const e of evs) counts[e.category || 'online'] = (counts[e.category || 'online'] || 0) + 1;
+  renderTabs(counts, evs.length);
+
+  const list = tab === 'all' ? evs : evs.filter(e => (e.category || 'online') === tab);
+  $('evSummary').textContent = `${list.length} 条`;
+  if (!list.length){ $('events').innerHTML = '<div class="empty">暂无</div>'; return; }
+  $('events').innerHTML = list.slice(0, 120).map(e => `
+    <div class="ev">
+      <span class="dotm c-${esc(e.category || 'online')}"></span>
+      <time>${esc(evTime(e.at))}</time>
+      <span class="txt">
+        <div class="t1">${esc(e.title || e.nickname || '')}</div>
+        ${e.detail ? `<div class="t2">${esc(e.detail)}</div>` : ''}
+      </span>
+    </div>`).join('');
 }
 
 function render(s){
@@ -180,12 +244,10 @@ function render(s){
       <td><span class="badge b-off">无变化</span></td>
     </tr>`).join('') : '<tr><td colspan="3" class="empty">—</td></tr>';
 
-  $('events').innerHTML = s.events.length ? s.events.map(e => `
-    <div class="ev">
-      <time>${esc((e.at||'').slice(11))}</time>
-      <span class="who">${esc(e.nickname)}</span>
-      <span class="badge ${e.type === 'online' ? 'b-on' : e.type === 'offline' ? 'b-off' : 'b-part'}">${e.type === 'online' ? '上线' : e.type === 'offline' ? '下线' : '新上榜'}</span>
-    </div>`).join('') : '<div class="empty">暂无</div>';
+  renderEvents(s);
+
+  const errs = Object.entries(s.extraErrors || {});
+  if (errs.length) $('dayLabel').textContent += ' · 部分板块拉取失败';
 }
 
 function tickCountdown(){
@@ -198,8 +260,7 @@ function tickCountdown(){
 async function getStatus(){
   const r = await fetch('/api/status', {cache:'no-store'});
   if (!r.ok) throw new Error('status ' + r.status);
-  const s = await r.json();
-  render(s);
+  render(await r.json());
 }
 
 async function post(url, body){

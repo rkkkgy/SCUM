@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { CONFIG as CFG } from './lib/config.mjs';
-import { Monitor, clampInterval } from './lib/monitor.mjs';
+import { Monitor, clampInterval, acquireLock, releaseLock } from './lib/monitor.mjs';
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -14,6 +14,13 @@ const args = Object.fromEntries(
 );
 const PORT = Number(args.port || 8788);
 const OPEN = Boolean(args.open);
+
+const lock = acquireLock(CFG.dataDir);
+if (!lock.ok) {
+  console.error(`已经有监控在运行了（进程 ${lock.pid}），不要重复启动。`);
+  console.error(`直接打开 http://127.0.0.1:${PORT} 即可；要重启请先关掉原来那个窗口。`);
+  process.exit(1);
+}
 
 const monitor = new Monitor({
   dataDir: CFG.dataDir,
@@ -112,9 +119,18 @@ const server = http.createServer(async (req, res) => {
             .map((l) => JSON.parse(l))
         : [];
       const label = { online: '上线', offline: '下线', new: '新上榜' };
-      const head = '时间,玩家,事件,今日在线分钟数,区间增量分钟\n';
+      const catLabel = { online: '在线', kill: '击杀', unlock: '开锁', rank: '榜单', risk: '风控', system: '系统' };
+      const head = '时间,类别,玩家,事件,说明\n';
       const body = rows
-        .map((e) => [e.at, e.nickname, label[e.type] || e.type, e.minutes ?? '', e.delta ?? ''].join(','))
+        .map((e) =>
+          [
+            e.at,
+            catLabel[e.category || 'online'] || '在线',
+            e.nickname || '',
+            (e.title || label[e.type] || e.type || '').replace(/,/g, '，'),
+            String(e.detail || '').replace(/,/g, '，'),
+          ].join(','),
+        )
         .join('\n');
       res.writeHead(200, {
         'Content-Type': 'text/csv; charset=utf-8',
@@ -159,6 +175,9 @@ server.listen(PORT, '127.0.0.1', () => {
 process.on('SIGINT', () => {
   console.log('\n正在停止...');
   monitor.stop();
+  releaseLock(CFG.dataDir);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1500);
 });
+
+process.on('exit', () => releaseLock(CFG.dataDir));

@@ -4,7 +4,7 @@
 //   node watch.mjs --once           只刷新一次
 //   node watch.mjs --minutes=30     运行 30 分钟后自动停止
 import { CONFIG as CFG } from './lib/config.mjs';
-import { Monitor } from './lib/monitor.mjs';
+import { Monitor, acquireLock, releaseLock } from './lib/monitor.mjs';
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -15,6 +15,11 @@ const args = Object.fromEntries(
 
 const RUN_MINUTES = Number(args.minutes || 0);
 const ONCE = Boolean(args.once);
+const lock = acquireLock(CFG.dataDir);
+if (!lock.ok) {
+  console.error(`已经有监控在运行了（进程 ${lock.pid}），如需重启请先关掉原来的。`);
+  process.exit(1);
+}
 const monitor = new Monitor({
   dataDir: CFG.dataDir,
   intervalSec: args.interval ? Number(args.interval) : undefined,
@@ -64,14 +69,18 @@ async function main() {
   const deadline = RUN_MINUTES ? Date.now() + RUN_MINUTES * 60000 : Infinity;
   while (Date.now() < deadline) await sleep(1000);
   monitor.stop();
+  releaseLock(CFG.dataDir);
   log('监控结束，数据已保存到 data/');
 }
 
 process.on('SIGINT', () => {
   monitor.stop();
+  releaseLock(CFG.dataDir);
   log('已停止');
   process.exit(0);
 });
+
+process.on('exit', () => releaseLock(CFG.dataDir));
 
 main().catch((e) => {
   console.error('运行失败:', e.stack || e.message);
