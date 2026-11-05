@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCUM 在线排查</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0d1016; --panel:#141822; --line:#232a38; --text:#e7eaf0;
+  --muted:#8c95a8; --green:#4ade80; --amber:#fbbf24; --red:#f87171; --blue:#60a5fa;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 "Microsoft YaHei",system-ui,-apple-system,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 22px 60px}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:21px;margin:0 0 6px;letter-spacing:.3px}
+h1 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--green);margin-right:8px;vertical-align:middle;box-shadow:0 0 0 4px rgba(74,222,128,.14)}
+h1 .dot.paused{background:var(--amber);box-shadow:0 0 0 4px rgba(251,191,36,.14)}
+.meta{color:var(--muted);font-size:12.5px}
+.meta b{color:#c7cedd;font-weight:600}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:18px}
+.controls .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+label{color:var(--muted);font-size:13px}
+input[type=number]{width:76px;background:#0f131b;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px}
+button,a.btn{background:#1d2330;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;text-decoration:none;display:inline-block;transition:.15s}
+button:hover,a.btn:hover{background:#252d3d;border-color:#33405a}
+button.primary{background:#1d4ed8;border-color:#2563eb}
+button.primary:hover{background:#2563eb}
+button:disabled{opacity:.45;cursor:not-allowed}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 16px}
+.card b{display:block;font-size:26px;line-height:1.25;color:var(--blue)}
+.card.green b{color:var(--green)}
+.card span{color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.panel h2{font-size:13.5px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);color:#b9c2d4;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.panel h2 em{font-style:normal;color:var(--muted);font-size:12px;font-weight:400}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px 14px;text-align:left;border-bottom:1px solid #1c2230;font-size:13px}
+th{color:var(--muted);font-weight:500;font-size:12px;background:#11151d}
+tr:last-child td{border-bottom:none}
+td.num{font-variant-numeric:tabular-nums;color:#aeb7c8}
+td.up{color:var(--green);font-variant-numeric:tabular-nums}
+.badge{font-size:11.5px;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.b-on{background:rgba(74,222,128,.12);color:var(--green)}
+.b-off{background:rgba(148,163,184,.12);color:#9aa6bd}
+.b-part{background:rgba(251,191,36,.12);color:var(--amber)}
+.name{display:flex;align-items:center;gap:8px}
+.name i{width:7px;height:7px;border-radius:50%;background:#3a4357;display:inline-block}
+.name i.on{background:var(--green);box-shadow:0 0 6px rgba(74,222,128,.8)}
+.events{max-height:520px;overflow:auto}
+.ev{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #1c2230;font-size:12.5px;align-items:center}
+.ev:last-child{border:none}
+.ev time{color:#6f7a90;font-variant-numeric:tabular-nums;flex:none}
+.ev .who{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{padding:22px 16px;color:var(--muted);font-size:13px;text-align:center}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);background:#1f2634;border:1px solid #33405a;color:#dfe5f1;padding:9px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.25s}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast.err{border-color:#7f1d1d;color:#fecaca}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="dot" id="dot"></span>SCUM 今日在线排查</h1>
+      <div class="meta">
+        数据源 <b>1199.scum8.com</b> · 上次刷新 <b id="lastAt">—</b> ·
+        <span id="nextWrap">下次 <b id="nextIn">—</b></span> · 当前频率 <b id="curInt">—</b> · 榜单按分钟统计
+      </div>
+    </div>
+    <div class="meta" id="dayLabel"></div>
+  </header>
+
+  <div class="controls">
+    <label for="intv">检测频率</label>
+    <input type="number" id="intv" min="61" max="3600" step="10" value="120">
+    <label style="margin-left:-4px">秒<span style="color:#6f7a90">（≥61，榜单按分钟统计）</span></label>
+    <button id="applyInt">应用</button>
+    <div class="sep"></div>
+    <button class="primary" id="refresh">立即刷新</button>
+    <button id="toggle">暂停监控</button>
+    <a class="btn" href="/api/export/events.csv">导出事件 CSV</a>
+  </div>
+
+  <div class="cards">
+    <div class="card green"><b id="cOnline">0</b><span>判定在线</span></div>
+    <div class="card"><b id="cTotal">0</b><span>榜上人数（前 30）</span></div>
+    <div class="card"><b id="cRound">0</b><span>累计刷新次数</span></div>
+    <div class="card"><b id="cIdle">0</b><span>在榜但无变化</span></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <section class="panel">
+        <h2>在线 <em>今日累计时长在增长</em></h2>
+        <table>
+          <thead><tr><th style="width:38%">玩家</th><th>今日在线</th><th>本区间增长<br><span style="font-weight:400;color:#6f7a90">（分钟）</span></th><th>状态</th></tr></thead>          <tbody id="onlineBody"><tr><td colspan="4" class="empty">等待第一次刷新…</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>在榜但时长没变 <em>判定不在线</em></h2>
+        <table>
+          <thead><tr><th style="width:45%">玩家</th><th>今日在线</th><th>状态</th></tr></thead>
+          <tbody id="idleBody"><tr><td colspan="3" class="empty">—</td></tr></tbody>
+        </table>
+      </section>
+    </div>
+
+    <aside class="panel">
+      <h2>最近事件</h2>
+      <div class="events" id="events"><div class="empty">暂无</div></div>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let offset = 0;        // 服务器时间 - 本地时间
+let last = null;
+let busy = false;
+
+function fmtDur(sec){
+  sec = Math.max(0, Math.round(sec||0));
+  const d = Math.floor(sec/86400), h = Math.floor(sec%86400/3600), m = Math.floor(sec%3600/60);
+  if (d) return `${d}天${h}小时${m}分`;
+  if (h) return `${h}小时${m}分`;
+  return `${m}分`;
+}
+function fmtDelta(minutes){
+  const n = Math.round(minutes || 0);
+  if (n <= 0) return '—';
+  return '+' + n + ' 分钟';
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const clock = (iso) => iso ? new Date(iso).toLocaleTimeString('zh-CN', {hour12:false}) : '—';
+
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = 'toast', 2600);
+}
+
+function render(s){
+  last = s;
+  offset = s.serverNow - Date.now();
+  $('dot').className = 'dot' + (s.running ? '' : ' paused');
+  $('lastAt').textContent = clock(s.lastPollAt || s.updatedAt);
+  $('curInt').textContent = s.intervalSec + ' 秒';
+  $('cOnline').textContent = s.counts.online;
+  $('cTotal').textContent = s.counts.total;
+  $('cRound').textContent = s.round;
+  $('cIdle').textContent = s.counts.idle;
+  $('dayLabel').textContent = s.date + ' · 第 ' + s.round + ' 次刷新';
+  $('toggle').textContent = s.running ? '暂停监控' : '开始监控';
+  $('intv').value = s.intervalSec;
+
+  const online = s.players.filter(p => p.status === 'online' || p.status === 'new');
+  $('onlineBody').innerHTML = online.length ? online.map(p => `
+    <tr>
+      <td><div class="name"><i class="on"></i>${esc(p.name)}${p.title ? ` <span class="badge b-part">${esc(p.title)}</span>` : ''}</div></td>
+      <td class="num">${fmtDur(p.seconds)}</td>
+      <td class="up">${fmtDelta(p.delta)}</td>
+      <td><span class="badge ${p.status === 'new' ? 'b-part' : 'b-on'}">${p.status === 'new' ? '新上榜' : '在线'}</span></td>
+    </tr>`).join('')
+    : `<tr><td colspan="4" class="empty">${s.round <= 1 ? '正在建立基线，下一轮开始判定…' : '当前没有判定为在线的玩家'}</td></tr>`;
+
+  const idle = s.players.filter(p => p.status === 'idle');
+  $('idleBody').innerHTML = idle.length ? idle.map(p => `
+    <tr>
+      <td><div class="name"><i></i>${esc(p.name)}</div></td>
+      <td class="num">${fmtDur(p.seconds)}</td>
+      <td><span class="badge b-off">无变化</span></td>
+    </tr>`).join('') : '<tr><td colspan="3" class="empty">—</td></tr>';
+
+  $('events').innerHTML = s.events.length ? s.events.map(e => `
+    <div class="ev">
+      <time>${esc((e.at||'').slice(11))}</time>
+      <span class="who">${esc(e.nickname)}</span>
+      <span class="badge ${e.type === 'online' ? 'b-on' : e.type === 'offline' ? 'b-off' : 'b-part'}">${e.type === 'online' ? '上线' : e.type === 'offline' ? '下线' : '新上榜'}</span>
+    </div>`).join('') : '<div class="empty">暂无</div>';
+}
+
+function tickCountdown(){
+  if (!last || !last.running || !last.nextPollAt){ $('nextIn').textContent = last && !last.running ? '已暂停' : '—'; return; }
+  const remain = Math.max(0, Math.round((last.nextPollAt - (Date.now() + offset)) / 1000));
+  const m = Math.floor(remain/60), sec = remain%60;
+  $('nextIn').textContent = `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+async function getStatus(){
+  const r = await fetch('/api/status', {cache:'no-store'});
+  if (!r.ok) throw new Error('status ' + r.status);
+  const s = await r.json();
+  render(s);
+}
+
+async function post(url, body){
+  const r = await fetch(url, {
+    method:'POST',
+    headers: {'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+$('refresh').onclick = async () => {
+  if (busy) return;
+  busy = true;
+  const b = $('refresh'); b.disabled = true; b.textContent = '刷新中…';
+  try {
+    const j = await post('/api/refresh');
+    if (j.status) render(j.status);
+    if (j.skipped) toast('距上次不足 1 分钟，本次只更新数据，不改变在线状态');
+    else toast(j.ok ? `已刷新：在线 ${j.status.counts.online} 人` : `刷新失败：${j.error}`, !j.ok);
+  } catch(e){ toast('刷新失败：' + e.message, true); }
+  finally { busy = false; b.disabled = false; b.textContent = '立即刷新'; }
+};
+
+$('toggle').onclick = async () => {
+  try {
+    const running = last?.running;
+    await post(running ? '/api/stop' : '/api/start');
+    await getStatus();
+    toast(running ? '已暂停自动刷新' : '已开始自动刷新');
+  } catch(e){ toast(e.message, true); }
+};
+
+$('applyInt').onclick = async () => {
+  const v = Number($('intv').value);
+  if (!Number.isFinite(v) || v < 61 || v > 3600) return toast('频率需在 61–3600 秒之间（榜单最小单位是分钟）', true);
+  try {
+    const j = await post('/api/config', {intervalSec: v});
+    if (j.status) render(j.status);
+    toast(`已改为每 ${j.intervalSec} 秒刷新`);
+  } catch(e){ toast(e.message, true); }
+};
+
+$('intv').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('applyInt').click(); });
+
+setInterval(tickCountdown, 500);
+setInterval(() => { if (!busy) getStatus().catch(() => {}); }, 2000);
+getStatus().catch(e => toast('无法连接后端：' + e.message, true));
+</script>
+</body>
+</html>

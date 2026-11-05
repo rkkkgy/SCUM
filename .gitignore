@@ -1,0 +1,20 @@
+# 运行时数据：监控记录、状态、截图（不入库）
+data/
+
+# 浏览器用户目录：含登录 Cookie，绝不能提交
+.chrome-profile/
+
+# 旧版探针目录
+_probe/
+
+# 依赖与日志
+node_modules/
+*.log
+npm-debug.log*
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
