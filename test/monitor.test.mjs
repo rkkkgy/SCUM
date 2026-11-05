@@ -113,6 +113,37 @@ test('issue#2: 旧版 state 没有 board 时回退到当天最后快照过滤幽
   assert.deepEqual(m.status().players.map((p) => p.name), ['A']);
 });
 
+test('issue#2: idle 后掉榜不重复记下线事件', async (t) => {
+  const dir = tempDataDir();
+  const site = createSite({ board: [['A', 10], ['B', 10]] });
+  const restore = site.install();
+  t.after(() => {
+    restore();
+    removeDir(dir);
+  });
+
+  const m = new Monitor({ dataDir: dir, intervalSec: 120 });
+  await m.poll();
+
+  site.state.board = [['A', 12], ['B', 12]];
+  age(m);
+  await m.poll();
+
+  site.state.board = [['A', 14], ['B', 12]]; // B 分钟没涨 -> 下线
+  age(m);
+  await m.poll();
+  assert.equal(m.state.players.B.status, 'idle');
+
+  site.state.board = [['A', 16]]; // B 之后掉出前 30
+  age(m);
+  await m.poll();
+
+  const offB = onlineEvents(m).filter((e) => e.nickname === 'B' && e.type === 'offline');
+  assert.equal(offB.length, 1, '已判 idle 的玩家掉榜时不应再写一条下线');
+  assert.equal(offB[0].reason, undefined);
+  assert.equal(m.state.players.B, undefined);
+});
+
 test('issue#3: 55–60 秒的手动刷新只更新数据，不重算状态；≥61 秒才判定', async (t) => {
   const dir = tempDataDir();
   const site = createSite({ board: [['A', 10]] });
@@ -374,14 +405,11 @@ test('issue#7: 调度按固定节拍推进，抓取耗时不会累加到检测�
     await new Promise((r) => setTimeout(r, 40));
     return { ok: true };
   };
-  const due = Date.now() + 500;
-  m.nextPollAt = due;
+  const started = Date.now();
   await m._tick();
   assert.equal(polls, 1);
-  assert.ok(
-    Math.abs(m.nextPollAt - (due + 61_000)) < 100,
-    `下一轮应基于原定节拍（偏差 ${m.nextPollAt - (due + 61_000)}ms）`,
-  );
+  const gap = m.nextPollAt - started;
+  assert.ok(gap >= 61_000 && gap < 61_400, `下一轮应基于本轮开始时间 + 61s（实际 ${gap}ms）`);
 });
 
 test('跨天：排行榜基线重置，避免用昨天的名次误报涨跌', async (t) => {
