@@ -69,6 +69,37 @@ node server.mjs --interval=60      :: 指定初始频率（之后以面板设置
 | POST | `/api/start` / `/api/stop` | 开始 / 暂停 |
 | GET | `/api/export/events.csv` | 导出当天事件 |
 
+## 版本管理
+
+已用 Git 管理，主分支 `main`。
+
+```bat
+git status                       :: 看改动
+git add -A
+git commit -m "改了什么"          :: 提交
+git log --oneline                :: 历史
+```
+
+**不会被提交的内容**（见 `.gitignore`）：
+
+- `data/` —— 监控记录、状态、截图、看板，都是运行产物
+- `.chrome-profile/` —— 浏览器用户目录，里面有登录 Cookie，绝对不要提交
+- `node_modules/`、日志、编辑器配置
+
+仓库身份目前用的是本机占位名，想改成自己的：
+
+```bat
+git config user.name "你的名字"
+git config user.email "you@example.com"
+```
+
+还没有配置远程仓库，需要备份到 GitHub/Gitee 时：
+
+```bat
+git remote add origin <仓库地址>
+git push -u origin main
+```
+
 ## 注意
 
 - 榜单只显示**今日在线时长前 30 名**，第 30 名之后的在线玩家抓不到（页面「在线人数」可能比识别结果多 1～2 人，就是这个原因）。
