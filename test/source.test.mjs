@@ -30,6 +30,15 @@ test('issue#10: status.mjs 与 /api/status 同源，不再打印不存在的 rep
   assert.doesNotMatch(src, /fmtDelta/);
 });
 
+test('事件颜色：前端按 eventTone 输出 tone-* 类，旧 c-* 类已移除', () => {
+  const html = read('public/index.html');
+  assert.match(html, /<script type="module">/);
+  assert.match(html, /import \{ eventTone \} from '\.\/event-tone\.js'/);
+  assert.match(html, /class="ev tone-\$\{eventTone\(e\)\}"/);
+  assert.doesNotMatch(html, /c-online|c-kill|c-unlock|c-rank|c-risk|c-system/);
+  assert.doesNotMatch(html, /class="dotm c-/);
+});
+
 test('issue#12: README 不再声称远程仓库未配置 / watch.mjs 会用 CDP', () => {
   const readme = read('README.md');
   assert.doesNotMatch(readme, /还没有配置远程仓库/);

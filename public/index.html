@@ -57,15 +57,22 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
 .tab.active{background:#1d4ed8;border-color:#2563eb;color:#fff}
 .tab .n{opacity:.65;margin-left:4px;font-variant-numeric:tabular-nums}
 .events{max-height:620px;overflow:auto}
-.ev{display:flex;gap:9px;padding:9px 14px;border-bottom:1px solid #1a2029;font-size:12.5px;align-items:flex-start}
-.ev:last-child{border:none}
-.ev .dotm{width:7px;height:7px;border-radius:50%;margin-top:7px;flex:none;background:#3a4357}
+.ev{--tone:#94a3b8;display:flex;gap:9px;padding:9px 14px;border-bottom:1px solid #1a2029;border-left:3px solid var(--tone);font-size:12.5px;align-items:flex-start}
+.ev:last-child{border-bottom:none}
+.ev.tone-good{--tone:var(--green)}
+.ev.tone-bad{--tone:var(--red)}
+.ev.tone-info{--tone:var(--blue)}
+.ev.tone-warn{--tone:var(--amber)}
+.ev.tone-muted{--tone:#94a3b8}
+.ev .dotm{width:7px;height:7px;border-radius:50%;margin-top:7px;flex:none;background:var(--tone)}
 .ev .txt{flex:1;min-width:0}
 .ev .t1{color:#dfe5f1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev.tone-good .t1{color:#86efac}
+.ev.tone-bad .t1{color:#fca5a5}
+.ev.tone-info .t1{color:#93c5fd}
+.ev.tone-warn .t1{color:#fcd34d}
 .ev .t2{color:#6f7a90;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev time{color:#657089;font-variant-numeric:tabular-nums;flex:none;font-size:11.5px;margin-top:2px}
-.c-online{background:var(--green)} .c-kill{background:#fb7185} .c-unlock{background:var(--blue)}
-.c-rank{background:var(--amber)} .c-risk{background:var(--red)} .c-system{background:#94a3b8}
 .empty{padding:22px 16px;color:var(--muted);font-size:13px;text-align:center}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);background:#1f2634;border:1px solid #33405a;color:#dfe5f1;padding:9px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.25s}
 .toast.show{opacity:1;transform:translateX(-50%)}
@@ -132,7 +139,9 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
 </div>
 <div class="toast" id="toast"></div>
 
-<script>
+<script type="module">
+import { eventTone } from './event-tone.js';
+
 const $ = (id) => document.getElementById(id);
 let offset = 0;        // 服务器时间 - 本地时间
 let last = null;
@@ -196,8 +205,8 @@ function renderEvents(s){
   $('evSummary').textContent = `${list.length} 条`;
   if (!list.length){ $('events').innerHTML = '<div class="empty">暂无</div>'; return; }
   $('events').innerHTML = list.slice(0, 120).map(e => `
-    <div class="ev">
-      <span class="dotm c-${esc(e.category || 'online')}"></span>
+    <div class="ev tone-${eventTone(e)}">
+      <span class="dotm"></span>
       <time>${esc(evTime(e.at))}</time>
       <span class="txt">
         <div class="t1">${esc(e.title || e.nickname || '')}</div>
