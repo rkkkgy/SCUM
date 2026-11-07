@@ -13,7 +13,7 @@ console.log(`\n=== SCUM 今日在线（${s.date}）最后刷新：${s.updatedAt 
 console.log(`榜上 ${s.counts.total} 人，刷新 ${s.round} 次\n`);
 
 const line = (p) => {
-  const delta = p.delta > 0 ? `  +${p.delta}分钟` : '';
+  const delta = p.delta > 0 ? `  +${p.delta}秒` : '';
   console.log(`  ${p.name.padEnd(18, ' ')} ${p.durationText.padStart(12, ' ')}${delta}`);
 };
 

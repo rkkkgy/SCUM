@@ -27,12 +27,17 @@ function jsonResponse(obj, status = 200) {
 
 export function makeBoard(entries) {
   return {
-    data: entries.map(([nickname, minutes]) => ({
-      nickname,
-      rank_value: minutes * 60,
-      jinbilist: `${Math.floor(minutes / 60)}小时${minutes % 60}分钟`,
-      membership_title: '',
-    })),
+    data: entries.map(([nickname, minutes, seconds]) => {
+      // 第三个值可选：直接给秒数，用来模拟“分钟没跳但秒数在涨”
+      const sec = seconds == null ? minutes * 60 : seconds;
+      const m = Math.floor(sec / 60);
+      return {
+        nickname,
+        rank_value: sec,
+        jinbilist: `${Math.floor(m / 60)}小时${m % 60}分钟`,
+        membership_title: '',
+      };
+    }),
   };
 }
 
@@ -58,6 +63,13 @@ export function createSite(initial = {}) {
     unlock: [],
     risk: [],
     ranks: {},
+    vehicle: [],
+    bunkerStatus: [],
+    bunkerUnlock: [],
+    switches: {
+      Killdata: 'true', Unlockdata: 'true', abandonedbunker: 'true',
+      bandata: 'true', thecharts: 'true', vehiclelog: 'true',
+    },
     fail: {},
     delayMs: {},
     ...initial,
@@ -75,6 +87,15 @@ export function createSite(initial = {}) {
       const delay = state.delayMs[key] || 0;
       if (delay) await new Promise((r) => setTimeout(r, delay));
       if (state.fail[key]) throw new Error(`stub failure: ${key}`);
+      if (p === '/user/logdata/bunker') {
+        return jsonResponse({ success: true, data: state.bunkerStatus, meta: { unlockLogs: state.bunkerUnlock } });
+      }
+      if (p === '/api/severlog/vehicle') {
+        return jsonResponse({ success: true, data: state.vehicle });
+      }
+      if (p === '/publicdata.html' && url.searchParams.get('queryswitch') === 'yes') {
+        return jsonResponse({ success: true, data: state.switches, ...state.switches });
+      }
       if (fenlei === '1') return jsonResponse({ success: true, data: state.kill });
       if (fenlei === '2') return jsonResponse({ success: true, data: state.unlock });
       if (fenlei === '5') return jsonResponse({ success: true, data: state.risk });

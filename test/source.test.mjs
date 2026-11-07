@@ -64,6 +64,23 @@ test('issue#13: 已删除零调用导出与重复实现', () => {
   assert.doesNotMatch(monitor, /eventCounts/);
 });
 
+test('原始数据：/data 子页面存在、看板有入口、服务端有查询接口', () => {
+  const data = read('public/data.html');
+  assert.match(data, /原始数据记录/);
+  assert.match(data, /\/api\/records\/meta/);
+  assert.match(data, /\/api\/records\?/);
+  assert.match(data, /\/api\/ranks\?/);
+  const index = read('public/index.html');
+  assert.match(index, /href="\/data"/);
+  const server = read('server.mjs');
+  assert.match(server, /p === '\/data'/);
+  assert.match(server, /readRecords\(/);
+  assert.match(server, /readRankSnapshots\(/);
+  const monitor = read('lib/monitor.mjs');
+  assert.match(monitor, /new RecordStore/);
+  assert.match(monitor, /_recordRaw/);
+});
+
 test('issue#8: server 对非法频率与日期返回 400', () => {
   const server = read('server.mjs');
   assert.match(server, /sec < MIN_INTERVAL_SEC \|\| sec > MAX_INTERVAL_SEC/);

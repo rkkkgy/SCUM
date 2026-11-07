@@ -7,6 +7,10 @@ import { CONFIG as CFG } from './lib/config.mjs';
 import { parseArgs } from './lib/args.mjs';
 import { Monitor, acquireLock, releaseLock, MIN_INTERVAL_SEC, MAX_INTERVAL_SEC } from './lib/monitor.mjs';
 import { buildEventsCsv, eventsCsvFilename, isValidDateParam, readEvents } from './lib/export.mjs';
+import {
+  buildRecordsCsv, readRecords, readRecordMeta, readRankSnapshots,
+  RECORD_SOURCES, RANK_TYPES, RANK_TYPE_LABEL,
+} from './lib/records.mjs';
 
 const args = parseArgs();
 const PORT = Number(args.port || 8788);
@@ -36,6 +40,18 @@ function json(res, code, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(body);
+}
+
+/** 取客户端传入的日期；缺省为今天，非法返回 null */
+function dateParam(url) {
+  const date = url.searchParams.get('date') || monitor.status().date;
+  return isValidDateParam(date) ? date : null;
+}
+
+function clampInt(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
 }
 
 function readBody(req) {
@@ -76,7 +92,58 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
 
+    if (p === '/data' || p === '/data.html') {
+      const html = fs.readFileSync(path.join(import.meta.dirname, 'public', 'data.html'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(html);
+    }
+
     if (p === '/api/status') return json(res, 200, monitor.status());
+
+    if (p === '/api/records/meta') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      return json(res, 200, {
+        ...readRecordMeta(CFG.dataDir, date),
+        sourcesLabel: RECORD_SOURCES,
+        rankTypes: RANK_TYPES,
+        rankTypeLabel: RANK_TYPE_LABEL,
+      });
+    }
+
+    if (p === '/api/records') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      const source = url.searchParams.get('source') || '';
+      const q = url.searchParams.get('q') || '';
+      const limit = clampInt(url.searchParams.get('limit'), 1, 500, 100);
+      const offset = clampInt(url.searchParams.get('offset'), 0, 1e9, 0);
+      return json(res, 200, { date, ...readRecords(CFG.dataDir, date, { source, q, limit, offset }) });
+    }
+
+    if (p === '/api/ranks') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      const type = url.searchParams.get('type') || '';
+      if (type && !RANK_TYPES.includes(type)) return json(res, 400, { error: '未知的排行榜类型' });
+      const limit = clampInt(url.searchParams.get('limit'), 1, 200, 50);
+      const offset = clampInt(url.searchParams.get('offset'), 0, 1e9, 0);
+      return json(res, 200, { date, type, ...readRankSnapshots(CFG.dataDir, date, { type, limit, offset }) });
+    }
+
+    if (p === '/api/records/export.csv') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      const source = url.searchParams.get('source') || '';
+      const q = url.searchParams.get('q') || '';
+      const { items } = readRecords(CFG.dataDir, date, { source, q, limit: 1e9, offset: 0 });
+      const csv = buildRecordsCsv(items);
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="scum-records-${date}.csv"`,
+      });
+      return res.end(csv);
+    }
 
     if (p === '/api/config' && req.method === 'POST') {
       let body;
@@ -89,7 +156,7 @@ const server = http.createServer(async (req, res) => {
       if (!Number.isFinite(sec) || sec < MIN_INTERVAL_SEC || sec > MAX_INTERVAL_SEC) {
         return json(res, 400, {
           ok: false,
-          error: `检测频率需在 ${MIN_INTERVAL_SEC}–${MAX_INTERVAL_SEC} 秒之间（榜单按分钟统计）`,
+          error: `检测频率需在 ${MIN_INTERVAL_SEC}–${MAX_INTERVAL_SEC} 秒之间（小于 61 秒秒数增量太小）`,
         });
       }
       monitor.setInterval(Math.round(sec));

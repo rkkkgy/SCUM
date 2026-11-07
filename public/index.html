@@ -87,7 +87,7 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
       <h1><span class="dot" id="dot"></span>SCUM 今日在线排查</h1>
       <div class="meta">
         数据源 <b>1199.scum8.com</b> · 上次刷新 <b id="lastAt">—</b> ·
-        <span id="nextWrap">下次 <b id="nextIn">—</b></span> · 当前频率 <b id="curInt">—</b> · 榜单按分钟统计
+        <span id="nextWrap">下次 <b id="nextIn">—</b></span> · 当前频率 <b id="curInt">—</b> · 榜单按秒判定
       </div>
     </div>
     <div class="meta" id="dayLabel"></div>
@@ -96,12 +96,13 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
   <div class="controls">
     <label for="intv">检测频率</label>
     <input type="number" id="intv" min="61" max="3600" step="10" value="120">
-    <label style="margin-left:-4px">秒<span style="color:#6f7a90">（≥61，榜单按分钟统计）</span></label>
+    <label style="margin-left:-4px">秒<span style="color:#6f7a90">（≥61，太短秒数增量太小）</span></label>
     <button id="applyInt">应用</button>
     <div class="sep"></div>
     <button class="primary" id="refresh">立即刷新</button>
     <button id="toggle">暂停监控</button>
     <a class="btn" href="/api/export/events.csv">导出事件 CSV</a>
+    <a class="btn" href="/data">原始数据 →</a>
   </div>
 
   <div class="cards">
@@ -116,7 +117,7 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
       <section class="panel">
         <h2>在线 <em>今日累计时长在增长</em></h2>
         <table>
-          <thead><tr><th style="width:38%">玩家</th><th>今日在线</th><th>本区间增长<br><span style="font-weight:400;color:#6f7a90">（分钟）</span></th><th>状态</th></tr></thead>
+          <thead><tr><th style="width:38%">玩家</th><th>今日在线</th><th>本区间增长<br><span style="font-weight:400;color:#6f7a90">（秒）</span></th><th>状态</th></tr></thead>
           <tbody id="onlineBody"><tr><td colspan="4" class="empty">等待第一次刷新…</td></tr></tbody>
         </table>
       </section>
@@ -159,10 +160,10 @@ const CATS = [
   { id: 'system', label: '系统' },
 ];
 
-function fmtDelta(minutes){
-  const n = Math.round(minutes || 0);
+function fmtDelta(seconds){
+  const n = Math.round(seconds || 0);
   if (n <= 0) return '—';
-  return '+' + n + ' 分钟';
+  return '+' + n + ' 秒';
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const clock = (iso) => iso ? new Date(iso).toLocaleTimeString('zh-CN', {hour12:false}) : '—';
@@ -303,7 +304,7 @@ $('toggle').onclick = async () => {
 
 $('applyInt').onclick = async () => {
   const v = Number($('intv').value);
-  if (!Number.isFinite(v) || v < 61 || v > 3600) return toast('频率需在 61–3600 秒之间（榜单最小单位是分钟）', true);
+  if (!Number.isFinite(v) || v < 61 || v > 3600) return toast('频率需在 61–3600 秒之间（小于 61 秒秒数增量太小）', true);
   try {
     const j = await post('/api/config', {intervalSec: v});
     intvDirty = false;

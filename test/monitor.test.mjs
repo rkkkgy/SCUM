@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Monitor, pruneOldData } from '../lib/monitor.mjs';
 import { todayKey, fmtDuration, parseMinutes, diffSnapshots } from '../lib/scum.mjs';
+import { readRecords, readRecordMeta, readRankSnapshots } from '../lib/records.mjs';
 import { age, createSite, removeDir, tempDataDir } from './helpers.mjs';
 
 function onlineEvents(m) {
@@ -31,7 +32,7 @@ test('issue#1: 基线之后的第一次有效比对会写上线事件', async (t
 
   const ev = onlineEvents(m).find((e) => e.nickname === 'A' && e.type === 'online');
   assert.ok(ev, '第二轮应该为 A 写入上线事件，而不是被 round<=1 抑制');
-  assert.match(ev.detail, /\+2 分钟/);
+  assert.match(ev.detail, /\+120 秒/);
   assert.equal(m.state.players.A.status, 'online');
 });
 
@@ -161,7 +162,7 @@ test('issue#3: 55–60 秒的手动刷新只更新数据，不重算状态；≥
   assert.equal(m.state.players.A.status, 'online');
   const eventsAfterOnline = m.events.length;
 
-  // 58 秒：榜单分钟数可能还没跳，必须跳过状态重算
+  // 58 秒：秒数增量太小，必须跳过状态重算
   m.state.updatedAt = new Date(Date.now() - 58_000).toISOString();
   const skipped = await m.poll();
   assert.equal(skipped.skipped, true);
@@ -181,6 +182,36 @@ test('issue#3: 55–60 秒的手动刷新只更新数据，不重算状态；≥
   assert.equal(judged.skipped, undefined);
   const off = onlineEvents(m).find((e) => e.nickname === 'A' && e.type === 'offline');
   assert.ok(off);
+});
+
+test('issue#14: 分钟没跳但秒数在涨时判在线，秒数真的不动才判下线', async (t) => {
+  const dir = tempDataDir();
+  // 601 秒 = 10 分 01 秒；649 秒还是 10 分钟，整分钟数没变
+  const site = createSite({ board: [['A', 10, 601]] });
+  const restore = site.install();
+  t.after(() => {
+    restore();
+    removeDir(dir);
+  });
+
+  const m = new Monitor({ dataDir: dir, intervalSec: 61 });
+  await m.poll();
+
+  site.state.board = [['A', 10, 649]]; // 秒 +48，分钟仍是 10
+  age(m);
+  await m.poll();
+  assert.equal(m.state.players.A.status, 'online', '秒数涨了就不该判下线');
+  assert.equal(m.state.players.A.minutes, 10);
+  assert.equal(onlineEvents(m).filter((e) => e.type === 'offline').length, 0);
+  const ev = onlineEvents(m).find((e) => e.nickname === 'A' && e.type === 'online');
+  assert.ok(ev);
+  assert.match(ev.detail, /\+48 秒/);
+
+  site.state.board = [['A', 10, 649]]; // 秒数也不动 -> 真没在线时长增长
+  age(m);
+  await m.poll();
+  assert.equal(m.state.players.A.status, 'idle');
+  assert.equal(onlineEvents(m).filter((e) => e.nickname === 'A' && e.type === 'offline').length, 1);
 });
 
 test('issue#4: 空榜单 / 缺字段视为抓取失败，保留上一轮状态', async (t) => {
@@ -466,6 +497,75 @@ test('跨天：检测到跨天时重建基线并记录系统事件', async (t) =
   assert.equal(m.state.players.A.status, 'new');
 });
 
+test('原始数据：全部来源的完整字段落盘，重复记录只存一次', async (t) => {
+  const dir = tempDataDir();
+  const site = createSite({
+    board: [['A', 10], ['B', 10]],
+    kill: [{
+      Gametime: '18:51:28', Killcoordinate: '', Killersteamid: '111',
+      Killername: 'A', Victimcoordinate: '', Victimername: 'B', Victimersteamid: '222',
+      Weapon: '简易地雷', WeaponCode: 'Mine_C [Explosion]', distance: '2480',
+      logtime: '2026-11-07 22:51:06',
+    }],
+    unlock: [{
+      Attempts: '3', complete: '成功', completeText: '成功', locktype: 'Basic',
+      locktypeText: '基础铁锁', logtime: '2026-11-07 22:52:00', name: 'A', number: '22',
+      ownerName: 'B', ownerSteamid: '222', second: '12.5', steamid: '111',
+      target: 'BP_Door_C', targetText: '门锁',
+    }],
+    risk: [{ endTime: '', name: 'C', publicReason: '联合风控', startTime: '2026-11-07 01:00:00', steamid: '333' }],
+    vehicle: [{
+      Operationtype: 'Disappeared', VehicleID: '1001', Vehicletype: 'WolfsWagen_ES',
+      carownerSteamid: '111', carownername: 'A', carownernumber: '1',
+      coordinate: 'X=1 Y=2 Z=3', logtime: '2026-11-07 22:53:00',
+    }],
+    bunkerStatus: [{ Bunkername: 'D1', Bunkerstatus: 'Active', BunkerstatusText: '激活中', logtime: '2026-11-07 22:00:48' }],
+    bunkerUnlock: [{
+      Numberfailures: '0', Operationresult: 'Yes', OperationresultText: '解锁成功',
+      logtime: '2026-11-07 22:54:00', name: 'A', steamid: '111', time: '36.7',
+    }],
+    ranks: { kill: ['A', 'B'], deathmatch: ['A'], fame: ['A'], total_online: ['A'] },
+  });
+  const restore = site.install();
+  t.after(() => {
+    restore();
+    removeDir(dir);
+  });
+
+  const m = new Monitor({ dataDir: dir, intervalSec: 61 });
+  await m.poll();
+  const date = todayKey();
+  let meta = readRecordMeta(dir, date);
+  assert.equal(meta.sources.kill, 1);
+  assert.equal(meta.sources.unlock, 1);
+  assert.equal(meta.sources.ban, 1);
+  assert.equal(meta.sources.vehicle, 1);
+  assert.equal(meta.sources.bunker_status, 1);
+  assert.equal(meta.sources.bunker_unlock, 1);
+  assert.equal(meta.sources.switches, 1);
+  assert.equal(meta.ranks, 1, '每轮应写一份 5 个排行榜的快照');
+
+  // 完整字段必须原样保留，不能只剩摘要
+  const kill = readRecords(dir, date, { source: 'kill' }).items[0];
+  assert.equal(kill.data.Killersteamid, '111');
+  assert.equal(kill.data.Victimersteamid, '222');
+  const unlock = readRecords(dir, date, { source: 'unlock' }).items[0];
+  assert.equal(unlock.data.ownerSteamid, '222');
+
+  const ranks = readRankSnapshots(dir, date, { type: 'today_online' });
+  assert.equal(ranks.total, 1);
+  assert.equal(ranks.items[0].rows.length, 2);
+
+  // 第二轮同样的记录不应重复落盘，但排行榜快照会继续追加
+  site.state.board = [['A', 12], ['B', 10]];
+  age(m);
+  await m.poll();
+  meta = readRecordMeta(dir, date);
+  assert.equal(meta.sources.kill, 1);
+  assert.equal(meta.sources.vehicle, 1);
+  assert.equal(meta.ranks, 2);
+});
+
 test('scum 工具函数：时长解析与差异判定', () => {
   assert.equal(fmtDuration(600), '10分');
   assert.equal(fmtDuration(3660), '1小时1分');
@@ -473,6 +573,6 @@ test('scum 工具函数：时长解析与差异判定', () => {
   assert.equal(parseMinutes('19小时27分钟'), 19 * 60 + 27);
   assert.equal(parseMinutes('1天23小时'), 47 * 60);
   assert.equal(parseMinutes('', 120), 2);
-  const rows = diffSnapshots(new Map([['A', 10], ['B', 10]]), new Map([['A', 12], ['C', 5]]));
+  const rows = diffSnapshots(new Map([['A', 600], ['B', 600]]), new Map([['A', 720], ['C', 300]]));
   assert.deepEqual(rows.map((r) => [r.name, r.status]), [['A', 'online'], ['C', 'new'], ['B', 'dropped']]);
 });

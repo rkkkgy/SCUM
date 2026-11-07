@@ -30,7 +30,7 @@ monitor.onPoll = (r) => {
   const s = monitor.status();
   log(`第 ${s.round} 次刷新｜榜上 ${s.counts.total} 人｜在线 ${s.counts.strictOnline} 人｜新上榜 ${s.counts.new} 人`);
   for (const p of s.players.filter((x) => x.status === 'online')) {
-    log(`  ● ${p.name}  ${p.durationText}  (+${p.delta ?? 0}分)`);
+    log(`  ● ${p.name}  ${p.durationText}  (+${p.delta ?? 0}秒)`);
   }
   if (s.counts.idle) log(`  ○ 无变化 ${s.counts.idle} 人`);
   for (const e of s.events.slice(0, 3)) {

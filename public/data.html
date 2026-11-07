@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCUM 原始数据</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0d1016; --panel:#141822; --line:#232a38; --text:#e7eaf0;
+  --muted:#8c95a8; --green:#4ade80; --amber:#fbbf24; --red:#f87171; --blue:#60a5fa;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 "Microsoft YaHei",system-ui,-apple-system,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 22px 60px}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:21px;margin:0 0 6px;letter-spacing:.3px}
+h1 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--blue);margin-right:8px;vertical-align:middle;box-shadow:0 0 0 4px rgba(96,165,250,.14)}
+.meta{color:var(--muted);font-size:12.5px}
+.meta b{color:#c7cedd;font-weight:600}
+a.btn,button{background:#1d2330;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;text-decoration:none;display:inline-block;transition:.15s}
+a.btn:hover,button:hover{background:#252d3d;border-color:#33405a}
+button.primary{background:#1d4ed8;border-color:#2563eb}
+button.primary:hover{background:#2563eb}
+button:disabled{opacity:.45;cursor:not-allowed}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.controls .sep{width:1px;height:22px;background:var(--line);margin:0 2px}
+label{color:var(--muted);font-size:13px}
+input[type=date],input[type=search]{background:#0f131b;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px}
+input[type=search]{width:260px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
+.tab{font-size:12px;padding:3px 10px;border-radius:999px;background:#171d29;color:#93a0b8;cursor:pointer;border:1px solid #222a3a;user-select:none;transition:.15s}
+.tab:hover{background:#1e2735}
+.tab.active{background:#1d4ed8;border-color:#2563eb;color:#fff}
+.tab .n{opacity:.65;margin-left:4px;font-variant-numeric:tabular-nums}
+.subbar{display:flex;gap:8px;flex-wrap:wrap;margin:-6px 0 12px}
+.summary{color:var(--muted);font-size:12.5px;margin:0 2px 10px}
+.summary b{color:#c7cedd;font-weight:600}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rec{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid #1a2029;font-size:12.5px;align-items:flex-start}
+.rec:last-child{border-bottom:none}
+.rec time{color:#657089;font-variant-numeric:tabular-nums;flex:none;font-size:11.5px;margin-top:2px;min-width:64px}
+.src{font-size:11px;padding:1px 8px;border-radius:999px;white-space:nowrap;flex:none;margin-top:1px;background:rgba(148,163,184,.12);color:#9aa6bd}
+.s-kill{background:rgba(248,113,113,.12);color:#fca5a5}
+.s-unlock{background:rgba(251,191,36,.12);color:#fcd34d}
+.s-vehicle{background:rgba(96,165,250,.12);color:#93c5fd}
+.s-bunker_status,.s-bunker_unlock{background:rgba(74,222,128,.12);color:#86efac}
+.s-ban{background:rgba(248,113,113,.18);color:#fca5a5}
+.s-switches{background:rgba(148,163,184,.12);color:#9aa6bd}
+.s-rank{background:rgba(96,165,250,.12);color:#93c5fd}
+.rec .body{flex:1;min-width:0}
+.rec .sum{color:#dfe5f1;word-break:break-all}
+.rec details{margin-top:4px}
+.rec summary{cursor:pointer;color:#6f7a90;font-size:11.5px}
+pre{margin:6px 0 0;padding:10px;background:#0f131b;border:1px solid #1e2634;border-radius:8px;color:#aeb7c8;font-size:11.5px;line-height:1.5;overflow:auto;max-height:340px;white-space:pre-wrap;word-break:break-all}
+.rank-table{width:100%;border-collapse:collapse;margin-top:6px}
+.rank-table th,.rank-table td{padding:4px 8px;text-align:left;border-bottom:1px solid #1c2230;font-size:11.5px}
+.rank-table th{color:var(--muted);font-weight:500;background:#11151d}
+.empty{padding:26px 16px;color:var(--muted);font-size:13px;text-align:center}
+.more{display:flex;justify-content:center;margin-top:14px}
+.hint{color:#6f7a90;font-size:11.5px}
+@media(max-width:700px){input[type=search]{width:100%}.rec time{min-width:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="dot"></span>原始数据记录</h1>
+      <div class="meta">
+        数据源 <b>1199.scum8.com</b> · 全部接口字段原样落盘 · 按事件时间（logtime）排序 ·
+        <span id="range">—</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <a class="btn" href="/">← 返回看板</a>
+      <a class="btn" id="csv" href="#">导出 CSV</a>
+    </div>
+  </header>
+
+  <div class="controls">
+    <label for="date">日期</label>
+    <input type="date" id="date">
+    <button class="primary" id="refresh">刷新</button>
+    <label><input type="checkbox" id="auto" checked> 自动刷新（15 秒）</label>
+    <div class="sep"></div>
+    <input type="search" id="q" placeholder="搜索昵称 / SteamID / 任意字段">
+    <span class="hint" id="hint"></span>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="subbar" id="ranksBar" style="display:none"></div>
+
+  <div class="summary" id="summary">加载中…</div>
+  <div class="list" id="list"><div class="empty">加载中…</div></div>
+  <div class="more"><button id="more" style="display:none">加载更多</button></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const SOURCE_LABEL = {
+  all: '全部', kill: '击杀', unlock: '开锁', vehicle: '载具',
+  bunker_status: '地堡状态', bunker_unlock: '地堡开锁', ban: '封禁', switches: '功能开关', rank: '排行榜',
+};
+const SOURCE_ORDER = ['kill', 'unlock', 'vehicle', 'bunker_status', 'bunker_unlock', 'ban', 'switches'];
+const RANK_LABEL = { today_online: '今日在线', total_online: '累计在线', kill: '击杀', deathmatch: '死斗', fame: '声望' };
+const RANK_ORDER = ['today_online', 'total_online', 'kill', 'deathmatch', 'fame'];
+
+let date = new URLSearchParams(location.search).get('date') || '';
+let tab = new URLSearchParams(location.search).get('tab') || 'all';
+let q = '';
+let rankType = 'today_online';
+let offset = 0;
+const LIMIT = 100;
+let total = 0;
+let loaded = 0;
+let meta = null;
+let loading = false;
+let timer = null;
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const todayKey = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+const timeOf = (at) => {
+  if (!at) return '—';
+  const s = String(at);
+  return s.slice(0, 10) === todayKey() ? s.slice(11, 19) : s.slice(5, 19);
+};
+/** 事件时间：优先站点日志时间，封禁用开始时间，最后才用入库时间 */
+const eventTime = (ev) => {
+  const d = ev.data || {};
+  return d.logtime || d.startTime || ev.at || '';
+};
+const shortId = (id) => {
+  const s = String(id || '');
+  return s.length > 10 ? `${s.slice(0, 5)}…${s.slice(-4)}` : s;
+};
+
+function summarize(ev) {
+  const d = ev.data || {};
+  switch (ev.source) {
+    case 'kill': {
+      const dist = Number(d.distance) > 0 ? ` · ${(Number(d.distance) / 100).toFixed(1)} 米` : '';
+      return `${d.Killername || '?'} 击杀 ${d.Victimername || '?'} · ${d.Weapon || '未知武器'}${dist}`;
+    }
+    case 'unlock':
+      return `${d.name || '?'} ${d.completeText || d.complete || ''} ${d.targetText || d.target || ''} · ${d.locktypeText || d.locktype || ''} · ${d.second || '?'} 秒`;
+    case 'vehicle':
+      return `${d.Operationtype || '?'} · ${d.Vehicletype || '?'} · ${d.carownername || '无归属'}${d.carownerSteamid && d.carownerSteamid !== '0' ? `（${shortId(d.carownerSteamid)}）` : ''}`;
+    case 'bunker_status':
+      return `${d.Bunkername || '?'} · ${d.BunkerstatusText || d.Bunkerstatus || '?'}`;
+    case 'bunker_unlock':
+      return `${d.name || '?'} ${d.OperationresultText || ''} · ${d.time || '?'} 秒`;
+    case 'ban':
+      return `${d.name || '?'} · ${d.publicReason || '无说明'}`;
+    case 'switches': {
+      const on = Object.entries(d || {}).filter(([, v]) => String(v) === 'true').map(([k]) => k);
+      return `功能开关：${on.join(' / ') || '全部关闭'}`;
+    }
+    default:
+      return ev.key || '';
+  }
+}
+
+function renderTabs() {
+  const counts = meta?.sources || {};
+  const parts = [
+    `<span class="tab ${tab === 'all' ? 'active' : ''}" data-tab="all">全部<span class="n">${meta?.total ?? 0}</span></span>`,
+  ];
+  for (const key of SOURCE_ORDER) {
+    parts.push(`<span class="tab ${tab === key ? 'active' : ''}" data-tab="${key}">${SOURCE_LABEL[key]}<span class="n">${counts[key] || 0}</span></span>`);
+  }
+  parts.push(`<span class="tab ${tab === 'rank' ? 'active' : ''}" data-tab="rank">排行榜<span class="n">${meta?.ranks ?? 0}</span></span>`);
+  $('tabs').innerHTML = parts.join('');
+  $('tabs').querySelectorAll('.tab').forEach((el) => {
+    el.onclick = () => {
+      if (tab === el.dataset.tab) return;
+      tab = el.dataset.tab;
+      offset = 0;
+      loaded = 0;
+      renderTabs();
+      renderRanksBar();
+      load(true);
+    };
+  });
+}
+
+function renderRanksBar() {
+  const bar = $('ranksBar');
+  if (tab !== 'rank') { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = RANK_ORDER.map((t) =>
+    `<span class="tab ${rankType === t ? 'active' : ''}" data-rank="${t}">${RANK_LABEL[t]}</span>`).join('');
+  bar.querySelectorAll('.tab').forEach((el) => {
+    el.onclick = () => {
+      rankType = el.dataset.rank;
+      offset = 0;
+      loaded = 0;
+      renderRanksBar();
+      load(true);
+    };
+  });
+}
+
+function updateMetaLine() {
+  $('range').innerHTML = meta
+    ? `共 <b>${meta.total}</b> 条记录 · 排行榜快照 <b>${meta.ranks}</b> 份${meta.firstAt ? ` · 事件时间 ${esc(meta.firstAt)} ~ ${esc(meta.lastAt || '')}` : ''}`
+    : '—';
+  $('csv').href = `/api/records/export.csv?date=${encodeURIComponent(date)}${tab !== 'all' && tab !== 'rank' ? `&source=${tab}` : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+}
+
+function updateSummary(shown) {
+  $('summary').innerHTML = `共 <b>${total}</b> 条 · 已显示 <b>${shown}</b>${q ? ' · 搜索：' + esc(q) : ''}`;
+  $('more').style.display = offset + shown < total ? 'inline-block' : 'none';
+}
+
+function renderRecord(ev) {
+  const t = eventTime(ev);
+  const ingested = ev.at && ev.at !== t ? `<div class="hint">入库时间：${esc(ev.at)}</div>` : '';
+  return `<div class="rec">
+    <time>${esc(timeOf(t))}</time>
+    <span class="src s-${esc(ev.source)}">${esc(SOURCE_LABEL[ev.source] || ev.source)}</span>
+    <div class="body">
+      <div class="sum">${esc(summarize(ev))}</div>
+      <details><summary>原始 JSON</summary>${ingested}<pre>${esc(JSON.stringify(ev.data, null, 2))}</pre></details>
+    </div>
+  </div>`;
+}
+
+function renderRank(s) {
+  const rows = Array.isArray(s.rows) ? s.rows : [];
+  const table = rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${esc(r[4] || '')}</td></tr>`).join('');
+  return `<div class="rec">
+    <time>${esc(timeOf(s.at))}</time>
+    <span class="src s-rank">排行榜</span>
+    <div class="body">
+      <div class="sum">${esc(RANK_LABEL[rankType] || rankType)} · ${rows.length} 人</div>
+      <details><summary>展开榜单</summary>
+        <table class="rank-table"><thead><tr><th>#</th><th>玩家</th><th>数值</th><th>文本</th><th>头衔</th></tr></thead><tbody>${table}</tbody></table>
+      </details>
+    </div>
+  </div>`;
+}
+
+async function fetchJson(url) {
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`HTTP ${r.status} ${text.slice(0, 100)}`);
+  }
+  return r.json();
+}
+
+async function loadMeta() {
+  const url = '/api/records/meta' + (date ? `?date=${encodeURIComponent(date)}` : '');
+  meta = await fetchJson(url);
+  date = meta.date;
+  $('date').value = date;
+  renderTabs();
+  updateMetaLine();
+}
+
+async function load(reset) {
+  if (loading) return;
+  loading = true;
+  if (reset) { offset = 0; loaded = 0; }
+  try {
+    const params = new URLSearchParams({ date, limit: String(LIMIT), offset: String(offset) });
+    let url;
+    if (tab === 'rank') {
+      params.set('type', rankType);
+      url = '/api/ranks?' + params;
+    } else {
+      if (tab !== 'all') params.set('source', tab);
+      if (q) params.set('q', q);
+      url = '/api/records?' + params;
+    }
+    const j = await fetchJson(url);
+    total = j.total || 0;
+    const items = j.items || [];
+    if (reset) $('list').innerHTML = '';
+    if (!items.length) {
+      if (reset) $('list').innerHTML = `<div class="empty">${tab === 'rank' ? '还没有排行榜快照' : '这个日期 / 分类下还没有记录'}</div>`;
+    } else {
+      const html = items.map(tab === 'rank' ? renderRank : renderRecord).join('');
+      $('list').insertAdjacentHTML('beforeend', html);
+      loaded += items.length;
+      offset += items.length;
+    }
+    updateSummary(loaded);
+  } catch (e) {
+    $('list').innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+    $('summary').textContent = '加载失败';
+  } finally {
+    loading = false;
+  }
+}
+
+async function refresh() {
+  try {
+    await loadMeta();
+    await load(true);
+  } catch (e) {
+    $('summary').textContent = '刷新失败：' + e.message;
+  }
+}
+
+$('refresh').onclick = refresh;
+$('date').onchange = () => {
+  date = $('date').value;
+  offset = 0; loaded = 0;
+  history.replaceState(null, '', `?date=${encodeURIComponent(date)}&tab=${tab}`);
+  refresh();
+};
+$('more').onclick = () => load(false);
+
+let qTimer = null;
+$('q').oninput = () => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => {
+    q = $('q').value.trim();
+    offset = 0; loaded = 0;
+    load(true);
+  }, 300);
+};
+
+function autoLoop() {
+  clearInterval(timer);
+  timer = setInterval(() => {
+    if (!$('auto').checked) return;
+    if (document.visibilityState !== 'visible') return;
+    if (loading || q || tab === 'rank') return;
+    if (date !== todayKey()) return;
+    // 用户展开了 JSON 或已加载多页时不要打断
+    if (offset > LIMIT || document.querySelector('.rec details[open]')) return;
+    refresh();
+  }, 15000);
+}
+
+renderRanksBar();
+autoLoop();
+refresh();
+</script>
+</body>
+</html>
