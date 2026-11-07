@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Monitor, pruneOldData } from '../lib/monitor.mjs';
+import { Monitor, pruneOldData, acquireLock, releaseLock } from '../lib/monitor.mjs';
 import { todayKey, fmtDuration, parseMinutes, diffSnapshots } from '../lib/scum.mjs';
 import { readRecords, readRecordMeta, readRankSnapshots } from '../lib/records.mjs';
 import { age, createSite, removeDir, tempDataDir } from './helpers.mjs';
@@ -564,6 +564,20 @@ test('原始数据：全部来源的完整字段落盘，重复记录只存一�
   assert.equal(meta.sources.kill, 1);
   assert.equal(meta.sources.vehicle, 1);
   assert.equal(meta.ranks, 2);
+});
+
+test('全新解压：data 目录不存在时也能创建单实例锁并启动', (t) => {
+  const dir = tempDataDir();
+  t.after(() => removeDir(dir));
+  const fresh = path.join(dir, 'data');
+  assert.equal(fs.existsSync(fresh), false, '前置条件：data 目录还不存在');
+
+  const lock = acquireLock(fresh);
+  assert.equal(lock.ok, true);
+  assert.equal(fs.existsSync(path.join(fresh, 'monitor.lock')), true);
+
+  releaseLock(fresh);
+  assert.equal(fs.existsSync(path.join(fresh, 'monitor.lock')), false);
 });
 
 test('scum 工具函数：时长解析与差异判定', () => {
