@@ -146,8 +146,11 @@ function summarize(ev) {
       const dist = Number(d.distance) > 0 ? ` · ${(Number(d.distance) / 100).toFixed(1)} 米` : '';
       return `${d.Killername || '?'} 击杀 ${d.Victimername || '?'} · ${d.Weapon || '未知武器'}${dist}`;
     }
-    case 'unlock':
-      return `${d.name || '?'} ${d.completeText || d.complete || ''} ${d.targetText || d.target || ''} · ${d.locktypeText || d.locktype || ''} · ${d.second || '?'} 秒`;
+    case 'unlock': {
+      const ownerRaw = String(d.ownerName || '').trim();
+      const owner = ownerRaw && ownerRaw !== '无归属' && !/^N\/A$/i.test(ownerRaw) ? ownerRaw : '';
+      return `${d.name || '?'} ${d.completeText || d.complete || ''} ${d.targetText || d.target || ''}${owner ? ` · 房主 ${owner}` : ''} · ${d.locktypeText || d.locktype || ''} · ${d.second || '?'} 秒`;
+    }
     case 'vehicle':
       return `${d.Operationtype || '?'} · ${d.Vehicletype || '?'} · ${d.carownername || '无归属'}${d.carownerSteamid && d.carownerSteamid !== '0' ? `（${shortId(d.carownerSteamid)}）` : ''}`;
     case 'bunker_status':

@@ -497,6 +497,41 @@ test('跨天：检测到跨天时重建基线并记录系统事件', async (t) =
   assert.equal(m.state.players.A.status, 'new');
 });
 
+test('开锁事件显示被开锁人（房主），无归属时不显示', async (t) => {
+  const dir = tempDataDir();
+  const site = createSite({ board: [['A', 10], ['B', 10]] });
+  const restore = site.install();
+  t.after(() => {
+    restore();
+    removeDir(dir);
+  });
+  const row = (over = {}) => ({
+    Attempts: '3', complete: '成功', completeText: '成功', locktype: 'Basic', locktypeText: '基础铁锁',
+    logtime: '2026-11-08 12:00:00', name: 'A', number: '22', ownerName: 'B', ownerSteamid: '222',
+    second: '12.5', steamid: '111', target: 'BP_Door_C', targetText: '门锁', ...over,
+  });
+
+  const m = new Monitor({ dataDir: dir, intervalSec: 61 });
+  await m.poll(); // 先建基线（此时开锁日志为空）
+
+  site.state.unlock = [row()];
+  age(m);
+  await m.poll();
+  const ev = m.events.find((e) => e.category === 'unlock' && e.type === 'unlock');
+  assert.ok(ev, '应写入开锁成功事件');
+  assert.match(ev.title, /A 撬开了 B 的门锁/);
+  assert.match(ev.detail, /房主 B/);
+
+  // 无归属 / N/A 不显示房主
+  site.state.unlock = [row({ logtime: '2026-11-08 12:01:00', targetText: '医疗补给箱', ownerName: '无归属', ownerSteamid: '0' })];
+  age(m);
+  await m.poll();
+  const ev2 = m.events.find((e) => e.title.includes('医疗补给箱'));
+  assert.ok(ev2, '应写入第二条开锁事件');
+  assert.doesNotMatch(ev2.title, /无归属/);
+  assert.doesNotMatch(ev2.detail, /房主/);
+});
+
 test('原始数据：全部来源的完整字段落盘，重复记录只存一次', async (t) => {
   const dir = tempDataDir();
   const site = createSite({

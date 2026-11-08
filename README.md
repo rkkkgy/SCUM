@@ -9,7 +9,7 @@
 |---|---|---|
 | 今日在线榜 | `fenlei=4&rankingType=today_online` | 谁上线 / 谁下线 |
 | 击杀日志 | `fenlei=1` | 「A 用 AK-47 击杀 B · 24.8 米」，含双方 SteamID |
-| 开锁日志 | `fenlei=2` | 「A 撬开了 军用武器柜 T4 · 中级银锁 · 4.7 秒」，含房主 |
+| 开锁日志 | `fenlei=2` | 「A 撬开了 B 的军用武器柜 T4 · 房主 B · 中级银锁 · 4.7 秒」，房主为空或“无归属”时省略 |
 | 封禁名单 | `fenlei=5` | 新被列入 / 移出风险名单，含开始/结束时间 |
 | 排行榜 | `fenlei=4&rankingType=kill/deathmatch/fame/total_online` | 击杀榜、死斗榜、声望榜、累计在线榜的名次变化 |
 | 地堡状态 | `/user/logdata/bunker` | A1/A3/C4/D1 当前激活/锁定 |
