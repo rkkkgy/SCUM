@@ -343,6 +343,35 @@ test('issue#9: 单行坏 JSON 不会清空全部历史事件', (t) => {
   assert.deepEqual(m.events.map((e) => e.nickname), ['B', 'A']);
 });
 
+test('零点/首轮基线：整榜 0 分钟不算在线，0 秒掉榜也不记下线', async (t) => {
+  const dir = tempDataDir();
+  const site = createSite({ board: [['A', 0], ['B', 0]] });
+  const restore = site.install();
+  t.after(() => {
+    restore();
+    removeDir(dir);
+  });
+
+  const m = new Monitor({ dataDir: dir, intervalSec: 61 });
+  await m.poll(); // 0 点刚过，整榜都是 0 分钟
+  let s = m.status();
+  assert.equal(s.counts.total, 2);
+  assert.equal(s.counts.online, 0, '首轮基线不能把整榜 0 分钟的人当成在线');
+  assert.equal(s.counts.new, 0);
+  assert.equal(s.counts.idle, 2);
+  assert.equal(m.state.players.A.seconds, 0);
+  assert.equal(m.events.filter((e) => e.category === 'online').length, 0, '不应写“今日首次上榜”');
+
+  // 下一分钟 A 涨了 1 秒，B 还是 0 并被挤出榜；B 没在线过，不该写“下线”
+  site.state.board = [['A', 0, 1]];
+  age(m);
+  await m.poll();
+  s = m.status();
+  assert.equal(s.counts.online, 1);
+  assert.equal(m.state.players.A.status, 'online');
+  assert.equal(m.events.some((e) => e.nickname === 'B' && e.type === 'offline'), false);
+});
+
 test('跨天重启：加载到昨天状态后，第一次成功 poll 补发跨天事件', async (t) => {
   const dir = tempDataDir();
   const site = createSite({ board: [['A', 5]] });
@@ -405,8 +434,9 @@ test('issue#11/13: status 计数与 UI 口径一致，并提供现成时长文�
   await m.poll();
   let s = m.status();
   assert.equal(s.counts.total, 2);
-  assert.equal(s.counts.new, 2);
-  assert.equal(s.counts.online, 2, '在线卡片应包含新上榜，与列表一致');
+  assert.equal(s.counts.new, 0, '首轮只是基线，不把榜上的人当成新上榜');
+  assert.equal(s.counts.online, 0, '首轮基线不判定在线');
+  assert.equal(s.counts.idle, 2);
   assert.equal(s.counts.strictOnline, 0);
   assert.equal(s.players[0].durationText, '10分');
   assert.equal(s.eventCounts, undefined);
@@ -494,7 +524,7 @@ test('跨天：检测到跨天时重建基线并记录系统事件', async (t) =
   const ev = m.events.find((e) => e.type === 'restart');
   assert.ok(ev);
   assert.match(ev.title, /检测到跨天/);
-  assert.equal(m.state.players.A.status, 'new');
+  assert.equal(m.state.players.A.status, 'idle', '跨天第一轮建基线，不算在线');
 });
 
 test('开锁事件显示被开锁人（房主），无归属时不显示', async (t) => {
