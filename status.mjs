@@ -10,7 +10,11 @@ if (argDate && argDate !== s.date) {
 }
 
 console.log(`\n=== SCUM 今日在线（${s.date}）最后刷新：${s.updatedAt || '—'} ===`);
-console.log(`榜上 ${s.counts.total} 人，刷新 ${s.round} 次\n`);
+console.log(`榜上 ${s.counts.total} 人，刷新 ${s.round} 次`);
+if (s.server) {
+  console.log(`服务器显示 ${s.server.online}/${s.server.max} 在线 · 本工具识别 ${s.counts.online} · 榜外约 ${s.counts.notDetected ?? 0}（${s.server.lastSeen || '—'}）`);
+}
+console.log('');
 
 const line = (p) => {
   const delta = p.delta > 0 ? `  +${p.delta}秒` : '';

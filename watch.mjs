@@ -29,6 +29,7 @@ monitor.onPoll = (r) => {
   if (!r.ok) return log('刷新失败:', r.error);
   const s = monitor.status();
   log(`第 ${s.round} 次刷新｜榜上 ${s.counts.total} 人｜在线 ${s.counts.strictOnline} 人｜新上榜 ${s.counts.new} 人`);
+  if (s.server) log(`服务器显示 ${s.server.online}/${s.server.max} 在线｜本工具识别 ${s.counts.online}｜榜外约 ${s.counts.notDetected ?? 0}`);
   for (const p of s.players.filter((x) => x.status === 'online')) {
     log(`  ● ${p.name}  ${p.durationText}  (+${p.delta ?? 0}秒)`);
   }

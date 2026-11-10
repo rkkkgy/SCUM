@@ -28,7 +28,7 @@ button:hover,a.btn:hover{background:#252d3d;border-color:#33405a}
 button.primary{background:#1d4ed8;border-color:#2563eb}
 button.primary:hover{background:#2563eb}
 button:disabled{opacity:.45;cursor:not-allowed}
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 16px}
 .card b{display:block;font-size:26px;line-height:1.25;color:var(--blue)}
 .card.green b{color:var(--green)}
@@ -77,6 +77,7 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);background:#1f2634;border:1px solid #33405a;color:#dfe5f1;padding:9px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.25s}
 .toast.show{opacity:1;transform:translateX(-50%)}
 .toast.err{border-color:#7f1d1d;color:#fecaca}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -107,6 +108,7 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
 
   <div class="cards">
     <div class="card green"><b id="cOnline">0</b><span>在线（含新上榜）</span></div>
+    <div class="card"><b id="cServer">—</b><span id="cServerMeta">服务器在线（SCUMSA）</span></div>
     <div class="card"><b id="cTotal">0</b><span>榜上人数（前 30）</span></div>
     <div class="card"><b id="cRound">0</b><span>累计刷新次数</span></div>
     <div class="card"><b id="cIdle">0</b><span>在榜但无变化</span></div>
@@ -226,6 +228,23 @@ function render(s){
   $('cTotal').textContent = s.counts.total;
   $('cRound').textContent = s.round;
   $('cIdle').textContent = s.counts.idle;
+  const srv = s.server;
+  if (srv && srv.online != null) {
+    $('cServer').textContent = srv.online + '/' + srv.max;
+    const diff = srv.online - s.counts.online;
+    const bits = ['服务器显示', '本工具 ' + s.counts.online];
+    if (s.round <= 1 && s.counts.online === 0) bits.push('基线中');
+    else if (diff > 0) bits.push('榜外约 ' + diff);
+    else if (diff < 0) bits.push('服务器数据可能延迟');
+    else bits.push('两边一致');
+    if (srv.lastSeen) bits.push(srv.lastSeen);
+    $('cServerMeta').textContent = bits.join(' · ');
+    $('cServer').title = '来源 ' + (srv.source || 'SCUMSA') + ' · 抓取 ' + (srv.fetchedAt || '—');
+  } else {
+    $('cServer').textContent = '—';
+    $('cServerMeta').textContent = '服务器在线（SCUMSA 暂不可用）';
+    $('cServer').title = '';
+  }
   $('dayLabel').textContent = s.date + ' · 第 ' + s.round + ' 次刷新';
   $('toggle').textContent = s.running ? '暂停监控' : '开始监控';
   $('toggle').disabled = false;

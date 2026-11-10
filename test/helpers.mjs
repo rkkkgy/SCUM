@@ -25,6 +25,13 @@ function jsonResponse(obj, status = 200) {
   });
 }
 
+function textResponse(text, status = 200) {
+  return new Response(text, {
+    status,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
+}
+
 export function makeBoard(entries) {
   return {
     data: entries.map(([nickname, minutes, seconds]) => {
@@ -70,6 +77,7 @@ export function createSite(initial = {}) {
       Killdata: 'true', Unlockdata: 'true', abandonedbunker: 'true',
       bandata: 'true', thecharts: 'true', vehiclelog: 'true',
     },
+    serverPage: { online: 29, max: 128, lastSeen: '1 min ago', name: '测试服' },
     fail: {},
     delayMs: {},
     ...initial,
@@ -79,7 +87,8 @@ export function createSite(initial = {}) {
   async function handler(url) {
     const p = url.pathname;
     const fenlei = url.searchParams.get('fenlei');
-    const key = fenlei === '4' ? `rank:${url.searchParams.get('rankingType')}` : `fenlei:${fenlei}`;
+    const isScumsa = url.hostname === 'scumsa.com';
+    const key = isScumsa ? 'scumsa' : (fenlei === '4' ? `rank:${url.searchParams.get('rankingType')}` : `fenlei:${fenlei}`);
     stats.calls.push(key);
     stats.active++;
     stats.maxActive = Math.max(stats.maxActive, stats.active);
@@ -87,6 +96,15 @@ export function createSite(initial = {}) {
       const delay = state.delayMs[key] || 0;
       if (delay) await new Promise((r) => setTimeout(r, delay));
       if (state.fail[key]) throw new Error(`stub failure: ${key}`);
+      if (isScumsa) {
+        const sp = state.serverPage;
+        return textResponse(
+          `<html><head><title>${sp.name || '测试服'} — SCUMSA</title>` +
+          `<script type="application/ld+json">{"playersOnline":${sp.online}}</script></head>` +
+          `<body><p>${sp.online} of ${sp.max} players online</p>` +
+          `<dl><dt>Last seen</dt><dd>${sp.lastSeen || ''}</dd></dl></body></html>`,
+        );
+      }
       if (p === '/user/logdata/bunker') {
         return jsonResponse({ success: true, data: state.bunkerStatus, meta: { unlockLogs: state.bunkerUnlock } });
       }

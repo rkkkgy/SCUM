@@ -372,6 +372,53 @@ test('零点/首轮基线：整榜 0 分钟不算在线，0 秒掉榜也不记�
   assert.equal(m.events.some((e) => e.nickname === 'B' && e.type === 'offline'), false);
 });
 
+test('服务器显示在线人数与榜单识别人数做比对', async (t) => {
+  const dir = tempDataDir();
+  const site = createSite({
+    board: [['A', 10], ['B', 10]],
+    serverPage: { online: 40, max: 128, lastSeen: '1 min ago', name: '测试服' },
+  });
+  const restore = site.install();
+  t.after(() => {
+    restore();
+    removeDir(dir);
+  });
+
+  const m = new Monitor({ dataDir: dir, intervalSec: 61 });
+  await m.poll(); // 基线：本工具在线 0
+  let s = m.status();
+  assert.equal(s.server.online, 40);
+  assert.equal(s.server.max, 128);
+  assert.equal(s.counts.serverOnline, 40);
+  assert.equal(s.counts.notDetected, 40, '基线时整榜还没判定，差值就是服务器在线数');
+
+  site.state.board = [['A', 12], ['B', 10]];
+  age(m);
+  await m.poll();
+  s = m.status();
+  assert.equal(s.counts.online, 1);
+  assert.equal(s.counts.serverOnline, 40);
+  assert.equal(s.counts.notDetected, 39, '服务器 40 人，本工具只识别到 1 人');
+
+  // 2 分钟内应复用缓存，不重复抓 SCUMSA
+  const before = site.stats.calls.filter((c) => c === 'scumsa').length;
+  site.state.serverPage.online = 55;
+  age(m);
+  await m.poll();
+  s = m.status();
+  assert.equal(s.server.online, 40, '2 分钟内用缓存');
+  assert.equal(site.stats.calls.filter((c) => c === 'scumsa').length, before);
+
+  // 缓存过期后重新抓
+  m.serverPopAt = 0;
+  site.state.board = [['A', 14], ['B', 10]];
+  age(m);
+  await m.poll();
+  s = m.status();
+  assert.equal(s.server.online, 55);
+  assert.equal(s.counts.notDetected, 54);
+});
+
 test('跨天重启：加载到昨天状态后，第一次成功 poll 补发跨天事件', async (t) => {
   const dir = tempDataDir();
   const site = createSite({ board: [['A', 5]] });
