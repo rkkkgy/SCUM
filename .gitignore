@@ -4,6 +4,9 @@ data/
 # 部署包构建产物（发队友的 zip，不入库）
 dist/
 
+# 临时调试文件
+tmp-*
+
 # 浏览器用户目录：含登录 Cookie，绝不能提交
 .chrome-profile/
 
