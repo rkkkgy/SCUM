@@ -392,6 +392,11 @@ test('服务器显示在线人数与榜单识别人数做比对', async (t) => {
   assert.equal(s.counts.serverOnline, 40);
   assert.equal(s.counts.notDetected, 40, '基线时整榜还没判定，差值就是服务器在线数');
 
+  // 只读的 status.mjs 不 poll，也能从 state 里看到上次的服务器在线数
+  const restarted = new Monitor({ dataDir: dir, intervalSec: 61, pruneData: false });
+  assert.equal(restarted.status().server.online, 40);
+  assert.equal(restarted.status().counts.serverOnline, 40);
+
   site.state.board = [['A', 12], ['B', 10]];
   age(m);
   await m.poll();
