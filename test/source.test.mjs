@@ -81,6 +81,18 @@ test('原始数据：/data 子页面存在、看板有入口、服务端有查�
   assert.match(monitor, /_recordRaw/);
 });
 
+test('历史事件：/events 页面存在、看板有入口、服务端有查询接口', () => {
+  const events = read('public/events.html');
+  assert.match(events, /历史事件/);
+  assert.match(events, /\/api\/events\?/);
+  assert.match(read('public/index.html'), /href="\/events"/);
+  assert.match(read('public/data.html'), /href="\/events"/);
+  const server = read('server.mjs');
+  assert.match(server, /p === '\/events'/);
+  assert.match(server, /p === '\/api\/events'/);
+  assert.match(server, /filterEvents\(/);
+});
+
 test('issue#8: server 对非法频率与日期返回 400', () => {
   const server = read('server.mjs');
   assert.match(server, /sec < MIN_INTERVAL_SEC \|\| sec > MAX_INTERVAL_SEC/);

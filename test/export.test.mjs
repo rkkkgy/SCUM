@@ -7,6 +7,8 @@ import {
   eventsCsvFilename,
   isValidDateParam,
   readEvents,
+  filterEvents,
+  eventCounts,
 } from '../lib/export.mjs';
 import { csvField, toCsv } from '../lib/csv.mjs';
 import { removeDir, tempDataDir } from './helpers.mjs';
@@ -68,4 +70,17 @@ test('issue#8/9: 导出读取时跳过坏行', (t) => {
   assert.deepEqual(readEvents(dir, '2026-11-07'), []);
   // 直接传入 null 行也不能让导出崩溃
   assert.equal(buildEventsCsv([null, { nickname: 'C', title: 'ok' }]).split('\r\n').length, 2);
+});
+
+test('历史事件：按类别 / 关键字过滤并统计条数', () => {
+  const rows = [
+    { at: '2026-11-06 10:00:00', category: 'online', nickname: 'A', title: 'A 上线' },
+    { at: '2026-11-06 10:01:00', category: 'kill', nickname: 'A', title: 'A 击杀了 B', detail: 'AK-47' },
+    { at: '2026-11-06 10:02:00', category: 'kill', nickname: 'C', title: 'C 击杀了 D' },
+    null,
+  ];
+  assert.equal(filterEvents(rows, { category: 'kill' }).length, 2);
+  assert.equal(filterEvents(rows, { q: 'B' }).length, 1);
+  assert.equal(filterEvents(rows, { category: 'kill', q: 'C' }).length, 1);
+  assert.deepEqual(eventCounts(rows), { online: 1, kill: 2 });
 });

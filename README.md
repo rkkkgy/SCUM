@@ -47,8 +47,9 @@ node server.mjs --interval=120     :: 指定初始频率（之后以面板设置
 | 立即刷新 | 不等倒计时，马上抓一次并重算在线名单，同时重新计时（距上次判定不足 61 秒时只更新数据，不改状态） |
 | 暂停 / 开始 | 暂停后不再自动抓取，但页面仍可手动刷新 |
 | 事件页签 | 全部 / 在线 / 击杀 / 开锁 / 榜单 / 风控 / 系统，各自带条数 |
+| 历史事件 | 看板只加载最近 200 条；完整历史去 `/events` 页面查（保留 14 天） |
 | 事件颜色 | 上线 / 开锁成功 / 名次上升 / 移出风控为绿色，下线 / 开锁失败 / 击杀 / 名次下降 / 新增风控为红色，新上榜与系统接入为蓝色，跨天为黄色 |
-| 导出事件 CSV | 下载当天全部事件（含类别、标题、说明），Excel 可直接打开 |
+| 导出事件 CSV | 下载当天全部事件（含类别、标题、说明），Excel 可直接打开；支持 `?date=` / `&category=` / `&q=` |
 | 自动更新 | 页面每 2 秒同步一次状态，并显示距下次刷新的倒计时 |
 
 ## 原始数据子页面 `/data`
@@ -74,6 +75,28 @@ node server.mjs --interval=120     :: 指定初始频率（之后以面板设置
 文件按**抓取日期**分；页面列表和日期范围按**事件时间**排。所以 0 点后第一次抓取补回来的昨晚记录会写进当天文件，但排序仍按各自的 `logtime`。
 
 `ranks-*.jsonl` 每天约 10–15 MB（每轮一份 139 行的五榜快照），和事件/记录文件一样保留 14 天后自动清理。
+
+## 历史事件 `/events`
+
+看板的「最近事件」为了轻量，只加载最近 200 条（内存里最多 400 条）；**完整事件流水**在 `data/events-YYYY-MM-DD.jsonl`，保留 14 天。
+
+打开 **http://127.0.0.1:8788/events**：
+
+- 日期选择，默认今天
+- 类别页签：全部 / 在线 / 击杀 / 开锁 / 榜单 / 风控 / 系统，带当天条数
+- 搜索玩家、标题或说明
+- 分页加载全部事件，不受 200 条限制
+- 导出当前筛选的 CSV
+
+也可以直接下载某天（Excel 可打开）：
+
+```text
+http://127.0.0.1:8788/api/export/events.csv?date=2026-11-10
+http://127.0.0.1:8788/api/export/events.csv?date=2026-11-10&category=online
+http://127.0.0.1:8788/api/export/events.csv?date=2026-11-10&q=JEFF
+```
+
+不想开页面时，直接用编辑器打开 `data/events-YYYY-MM-DD.jsonl` 也可以，一行一条 JSON。
 
 ## 在线人数比对
 
@@ -132,6 +155,7 @@ node server.mjs --interval=120     :: 指定初始频率（之后以面板设置
 | `server.mjs` | 本地 Web 服务，启动即开始监控 |
 | `public/index.html` | 网页面板（无外部依赖） |
 | `public/data.html` | 原始数据子页面（无外部依赖） |
+| `public/events.html` | 历史事件子页面（无外部依赖） |
 | `lib/monitor.mjs` | 监控核心：抓取、比对、状态与事件 |
 | `lib/scum.mjs` | 榜单接口、时长格式化、差异判定 |
 | `lib/sources.mjs` | 击杀 / 开锁 / 封禁 / 地堡 / 载具 / 开关接口 |
@@ -145,7 +169,7 @@ node server.mjs --interval=120     :: 指定初始频率（之后以面板设置
 | `test/` | `node:test` 测试（`npm test`） |
 | `data/state.json` | 最近一次状态（重启后接着算） |
 | `data/snapshots-*.jsonl` | 每轮抓取的原始榜单 |
-| `data/events-*.jsonl` | 上线/下线/击杀/开锁/榜单/风控事件流水 |
+| `data/events-*.jsonl` | 完整事件流水（上线/下线/击杀/开锁/榜单/风控），保留 14 天 |
 | `data/records-*.jsonl` | 全部来源的原始记录（去重后） |
 | `data/ranks-*.jsonl` | 每轮 5 个排行榜的完整快照 |
 
@@ -159,7 +183,9 @@ node server.mjs --interval=120     :: 指定初始频率（之后以面板设置
 | POST | `/api/config` | `{"intervalSec":120}` 改频率（不在 61–3600 之间返回 400） |
 | POST | `/api/refresh` | 立即刷新一次 |
 | POST | `/api/start` / `/api/stop` | 开始 / 暂停 |
-| GET | `/api/export/events.csv` | 导出指定日期（`?date=YYYY-MM-DD`）的事件；非法日期返回 400 |
+| GET | `/api/export/events.csv` | 导出事件 CSV，支持 `?date=YYYY-MM-DD&category=online&q=JEFF`；非法日期返回 400 |
+| GET | `/events` | 历史事件子页面 |
+| GET | `/api/events` | 历史事件，支持 `?date=&category=&q=&limit=&offset=` |
 | GET | `/data` | 原始数据子页面 |
 | GET | `/api/records/meta` | 各来源条数、排行榜快照数（`?date=YYYY-MM-DD`） |
 | GET | `/api/records` | 原始记录，支持 `?date=&source=&q=&limit=&offset=` |

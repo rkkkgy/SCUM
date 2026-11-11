@@ -6,7 +6,10 @@ import { exec } from 'node:child_process';
 import { CONFIG as CFG } from './lib/config.mjs';
 import { parseArgs } from './lib/args.mjs';
 import { Monitor, acquireLock, releaseLock, MIN_INTERVAL_SEC, MAX_INTERVAL_SEC } from './lib/monitor.mjs';
-import { buildEventsCsv, eventsCsvFilename, isValidDateParam, readEvents } from './lib/export.mjs';
+import {
+  buildEventsCsv, eventsCsvFilename, isValidDateParam, readEvents,
+  EVENT_CATEGORIES, EVENT_LABELS, eventCounts, filterEvents,
+} from './lib/export.mjs';
 import {
   buildRecordsCsv, readRecords, readRecordMeta, readRankSnapshots,
   RECORD_SOURCES, RANK_TYPES, RANK_TYPE_LABEL,
@@ -98,7 +101,35 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
 
+    if (p === '/events' || p === '/events.html') {
+      const html = fs.readFileSync(path.join(import.meta.dirname, 'public', 'events.html'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(html);
+    }
+
     if (p === '/api/status') return json(res, 200, monitor.status());
+
+    if (p === '/api/events') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      const category = url.searchParams.get('category') || '';
+      if (category && !EVENT_CATEGORIES.includes(category)) return json(res, 400, { error: '未知的事件类别' });
+      const q = url.searchParams.get('q') || '';
+      const limit = clampInt(url.searchParams.get('limit'), 1, 500, 100);
+      const offset = clampInt(url.searchParams.get('offset'), 0, 1e9, 0);
+      const rows = readEvents(CFG.dataDir, date);
+      const counts = eventCounts(rows);
+      const filtered = filterEvents(rows, { category, q })
+        .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+      return json(res, 200, {
+        date,
+        total: filtered.length,
+        counts,
+        categories: EVENT_CATEGORIES,
+        labels: EVENT_LABELS,
+        items: filtered.slice(offset, offset + limit),
+      });
+    }
 
     if (p === '/api/records/meta') {
       const date = dateParam(url);
@@ -187,7 +218,11 @@ const server = http.createServer(async (req, res) => {
       if (!isValidDateParam(date)) {
         return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
       }
-      const csv = buildEventsCsv(readEvents(CFG.dataDir, date));
+      const category = url.searchParams.get('category') || '';
+      const q = url.searchParams.get('q') || '';
+      const rows = filterEvents(readEvents(CFG.dataDir, date), { category, q })
+        .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+      const csv = buildEventsCsv(rows);
       res.writeHead(200, {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${eventsCsvFilename(date)}"`,
