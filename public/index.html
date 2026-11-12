@@ -357,15 +357,20 @@ function renderPanel(s, panel){
     return;
   }
 
+  // 面板数据只在一次抓取后变化；页面 2 秒轮询时不重画这块，避免名单表滚动位置被重置
+  const sig = `${panel.lastAt || ''}|${panel.lastError || ''}|${panel.online}`;
+  if (body.dataset.panelSig === sig) return;
+  body.dataset.panelSig = sig;
+
   const cmp = panel.comparison || {};
   const old = cmp.old || {};
   const nw = cmp.new || {};
   const diff = cmp.diff || {};
   const details = cmp.details || {};
-  const oldOnline = s.counts.online;
+  const oldOnline = old.online ?? s.counts.online;
   const delta = panel.online - oldOnline;
 
-  $('panelMeta').textContent = `新在线 ${panel.online} · 旧在线 ${oldOnline} · 差 ${signed(delta)} · 抓取 ${clock(panel.lastAt)}`;
+  $('panelMeta').textContent = `新在线 ${panel.online} · 旧在线（对照时）${oldOnline} · 差 ${signed(delta)} · 抓取 ${clock(panel.lastAt)}`;
 
   const top = `
     <div class="cmp-stat"><b>${panel.online}</b><span>新面板在线</span><div class="sub">旧监控 ${oldOnline} · 差 ${signed(delta)}</div></div>
@@ -415,6 +420,12 @@ function renderPanel(s, panel){
     return `<div class="cmp-row"><span class="cmp-kind">${esc(label)}</span><time>${esc(evTime(r.time))}</time><span class="who" title="${esc(t.who)}">${esc(t.who)}</span><span class="what" title="${esc(t.what)}">${esc(t.what)}</span></div>`;
   }).join('') : '<div class="cmp-off">新面板还没有日志记录。</div>';
 
+  // 重新抓取后重画时，保留名单表/标签区原来的滚动位置
+  const scrolls = [...body.querySelectorAll('.roster-wrap,.cmp-chips')].map((el) => ({
+    top: el.scrollTop,
+    left: el.scrollLeft,
+  }));
+
   body.innerHTML = `
     <div class="cmp-top">${top}</div>
     <div class="cmp-cols">
@@ -461,6 +472,13 @@ function renderPanel(s, panel){
       <span>面板日志最后 ${dateTime(panel.lastLogTime)}${panel.expiresAt ? ' · 账号到期 ' + dateTime(panel.expiresAt) : ''}</span>
       ${panel.lastError ? `<span style="color:#fca5a5">${esc(panel.lastError)}</span>` : ''}
     </div>`;
+
+  [...body.querySelectorAll('.roster-wrap,.cmp-chips')].forEach((el, i) => {
+    const s = scrolls[i];
+    if (!s) return;
+    el.scrollTop = s.top;
+    el.scrollLeft = s.left;
+  });
 }
 
 function render(s){

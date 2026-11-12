@@ -123,6 +123,8 @@ test('看板有新旧对照区块，/panel 页面和服务端接口存在', () =
   assert.match(index, /<th>IP<\/th>/);
   assert.match(index, /<th>坐标<\/th>/);
   assert.match(index, /<th>区域<\/th>/);
+  assert.match(index, /panelSig/);
+  assert.match(index, /scrollTop = s\.top/);
   assert.match(index, /renderPanel\(s, s\.panel\)/);
   assert.match(index, /href="\/panel"/);
   assert.match(page, /\/api\/panel\/compare/);
