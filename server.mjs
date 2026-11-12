@@ -241,9 +241,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/refresh' && req.method === 'POST') {
-      // 新面板异步刷新，不阻塞旧监控的“立即刷新”（面板不可用时也不会拖住页面）
-      panel.poll().catch(() => {});
+      // 先让旧监控完成判定，再异步刷新新面板做对照；新面板不可用也不会拖住页面
       const r = await monitor.poll();
+      panel.poll().catch(() => {});
       if (monitor.running) monitor.reschedule();
       return json(res, 200, { ...r, status: statusWithPanel() });
     }
