@@ -98,6 +98,20 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
 .cmp-list{padding:12px 16px;min-width:0}
 .cmp-list + .cmp-list{border-left:1px solid #1c2230}
 .cmp-chips{display:flex;flex-wrap:wrap;gap:5px;max-height:128px;overflow:auto}
+.cmp-roster{padding:12px 16px;border-bottom:1px solid #1c2230}
+.cmp-roster h3{font-size:12px;color:#9aa6bd;font-weight:600;margin:0 0 8px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.cmp-roster h3 em{font-style:normal;color:#6f7a90;font-weight:400;font-size:11px}
+.roster-wrap{max-height:300px;overflow:auto;border:1px solid #1c2230;border-radius:8px}
+.roster-table{width:100%;border-collapse:collapse;white-space:nowrap}
+.roster-table th,.roster-table td{padding:5px 9px;text-align:left;border-bottom:1px solid #1a2029;font-size:11.5px}
+.roster-table th{position:sticky;top:0;z-index:1;background:#11151d;color:#8c95a8;font-weight:500}
+.roster-table tr:last-child td{border-bottom:none}
+.roster-table td.mono{font-family:Consolas,"Courier New",monospace;font-size:10.5px;color:#aeb7c8}
+.roster-table td.ip{color:#c3ccdc;font-variant-numeric:tabular-nums}
+.roster-table td.coord{color:#9aa6bd;font-variant-numeric:tabular-nums}
+.roster-table .reg{display:inline-block;min-width:26px;text-align:center;border-radius:4px;background:#1b2433;color:#9fb0cc;padding:0 5px;font-size:10.5px}
+.roster-table .flag{font-size:10px;border-radius:999px;padding:0 6px;margin-right:3px;background:rgba(251,191,36,.12);color:var(--amber)}
+.roster-table .flag.bot{background:rgba(248,113,113,.12);color:var(--red)}
 .cmp-chip{font-size:11.5px;background:#171d29;border:1px solid #222a3a;border-radius:999px;padding:2px 8px;color:#c3ccdc;white-space:nowrap}
 .cmp-chip small{color:#6f7a90;margin-left:4px;font-size:10.5px}
 .cmp-chip.warn{background:rgba(251,191,36,.10);border-color:#3d3522;color:#fcd34d}
@@ -310,6 +324,21 @@ function panelRowText(key, r){
   };
 }
 
+function coordText(v){
+  const parts = String(v || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 3) return v || '—';
+  const axis = ['X', 'Y', 'Z'];
+  return parts.slice(0, 3).map((n, i) => `${axis[i]} ${Number(n).toLocaleString('en-US')}`).join(' · ');
+}
+
+function rosterFlags(p){
+  const out = [];
+  if (Number(p.isDrone)) out.push('<span class="flag">无人机</span>');
+  if (Number(p.isBot)) out.push('<span class="flag bot">机器人</span>');
+  if (Number(p.isBan)) out.push('<span class="flag bot">封禁</span>');
+  return out.join('') || '<span style="color:#5f6a7e">—</span>';
+}
+
 function renderPanel(s, panel){
   const body = $('panelBody');
   if (!panel) {
@@ -368,6 +397,18 @@ function renderPanel(s, panel){
   const missing = details.missingInOld || [];
   const extra = details.extraInOld || [];
 
+  const roster = Array.isArray(panel.roster) ? panel.roster : [];
+  const rosterRows = roster.length ? roster.map((p) => `
+    <tr>
+      <td><div class="name"><i class="on"></i>${esc(p.name)}</div></td>
+      <td class="mono" title="${esc(p.steamid)}">${esc(p.steamid || '—')}</td>
+      <td class="ip">${esc(p.ip || '—')}</td>
+      <td><span class="reg">${esc(p.region || '—')}</span></td>
+      <td class="coord" title="${esc(p.location)}">${esc(coordText(p.location))}</td>
+      <td>${esc(dateTime(p.loginAt))}</td>
+      <td>${rosterFlags(p)}</td>
+    </tr>`).join('') : '<tr><td colspan="7" class="empty">当前没有在线名单</td></tr>';
+
   const latest = latestPanelRows(panel);
   const latestHtml = latest.length ? latest.map(({ key, label, r }) => {
     const t = panelRowText(key, r);
@@ -400,6 +441,15 @@ function renderPanel(s, panel){
       <div class="cmp-list">
         <h3>旧监控在线但新名单没有 <em>${extra.length} 人</em></h3>
         <div class="cmp-chips">${chips(extra, 'warn', (x) => `${x.name} · ${x.status === 'new' ? '新上榜' : '在线'}`)}</div>
+      </div>
+    </div>
+    <div class="cmp-roster">
+      <h3>新面板在线名单 <em>${roster.length} 人 · 名字 · SteamID · IP · 区域 · 坐标 · 登录时间（来自 online_players）</em></h3>
+      <div class="roster-wrap">
+        <table class="roster-table">
+          <thead><tr><th>玩家</th><th>SteamID</th><th>IP</th><th>区域</th><th>坐标</th><th>登录时间</th><th>标记</th></tr></thead>
+          <tbody>${rosterRows}</tbody>
+        </table>
       </div>
     </div>
     <div class="cmp-latest">

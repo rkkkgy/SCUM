@@ -119,6 +119,10 @@ test('看板有新旧对照区块，/panel 页面和服务端接口存在', () =
   const page = fs.readFileSync(path.join(root, 'public', 'panel.html'), 'utf8');
   const server = fs.readFileSync(path.join(root, 'server.mjs'), 'utf8');
   assert.match(index, /新日志监控/);
+  assert.match(index, /新面板在线名单/);
+  assert.match(index, /<th>IP<\/th>/);
+  assert.match(index, /<th>坐标<\/th>/);
+  assert.match(index, /<th>区域<\/th>/);
   assert.match(index, /renderPanel\(s, s\.panel\)/);
   assert.match(index, /href="\/panel"/);
   assert.match(page, /\/api\/panel\/compare/);
@@ -138,7 +142,7 @@ test('PanelMonitor 能落盘快照/记录/对照，并算出在线差', async ()
     } else if (pathname.endsWith('/dashboard_overview')) {
       body = { code: 200, data: { online: { current: 3 }, active24h: { current: 9 }, killsToday: { current: 7 }, lastLogTime: '2026-11-12T12:00:00+08:00' } };
     } else if (pathname.endsWith('/online_players')) {
-      body = { code: 200, data: [{ gameName: 'A', steamid: '1', time: '2026-11-12 10:00:00', region: 'B1' }, { gameName: 'B', steamid: '2' }, { gameName: 'C', steamid: '3' }] };
+      body = { code: 200, data: [{ gameName: 'A', steamid: '1', ip: '10.0.0.1', location: '1 2 3', time: '2026-11-12 10:00:00', region: 'B1' }, { gameName: 'B', steamid: '2' }, { gameName: 'C', steamid: '3' }] };
     } else {
       body = { code: 200, total: 10, data: [{ time: '2026-11-12 11:00:00', name: 'A', steamid: '1', target: 'T', elapsedTime: '1.0', failedAttempts: '0', isSuccess: 1 }] };
     }
@@ -152,6 +156,9 @@ test('PanelMonitor 能落盘快照/记录/对照，并算出在线差', async ()
     const st = m.status();
     assert.equal(st.online, 3);
     assert.equal(st.rosterCount, 3);
+    assert.equal(st.roster[0].ip, '10.0.0.1');
+    assert.equal(st.roster[0].location, '1 2 3');
+    assert.equal(st.roster[0].region, 'B1');
     assert.equal(st.logs.kill.total, 10);
     assert.equal(st.comparison.diff.online, 1);
     assert.deepEqual(st.comparison.details.missingInOld.map((x) => x.name), ['C']);
