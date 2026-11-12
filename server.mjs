@@ -14,6 +14,7 @@ import {
   buildRecordsCsv, readRecords, readRecordMeta, readRankSnapshots,
   RECORD_SOURCES, RANK_TYPES, RANK_TYPE_LABEL,
 } from './lib/records.mjs';
+import { PanelMonitor, readPanelRows } from './lib/panel.mjs';
 
 const args = parseArgs();
 const PORT = Number(args.port || 8788);
@@ -30,7 +31,17 @@ const monitor = new Monitor({
   dataDir: CFG.dataDir,
   intervalSec: args.interval ? Number(args.interval) : undefined,
 });
+// 新日志面板独立运行：只读旧监控 status 做对照，不改旧统计逻辑
+const panel = new PanelMonitor({
+  dataDir: CFG.dataDir,
+  intervalMs: 120000,
+  oldStatus: () => monitor.status(),
+});
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('zh-CN', { hour12: false })}]`, ...a);
+
+function statusWithPanel() {
+  return { ...monitor.status(), panel: panel.status() };
+}
 
 monitor.onPoll = (r) => {
   if (!r.ok) return log('刷新失败:', r.error);
@@ -107,7 +118,41 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
 
-    if (p === '/api/status') return json(res, 200, monitor.status());
+    if (p === '/panel' || p === '/panel.html') {
+      const html = fs.readFileSync(path.join(import.meta.dirname, 'public', 'panel.html'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(html);
+    }
+
+    if (p === '/api/status') return json(res, 200, statusWithPanel());
+
+    if (p === '/api/panel/status') return json(res, 200, panel.status());
+
+    if (p === '/api/panel/refresh' && req.method === 'POST') {
+      const r = await panel.poll();
+      return json(res, 200, { ...r, status: panel.status() });
+    }
+
+    if (p === '/api/panel/compare') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      const limit = clampInt(url.searchParams.get('limit'), 1, 1000, 200);
+      return json(res, 200, readPanelRows(CFG.dataDir, 'compare', date, { limit }));
+    }
+
+    if (p === '/api/panel/snapshots') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      const limit = clampInt(url.searchParams.get('limit'), 1, 500, 100);
+      return json(res, 200, readPanelRows(CFG.dataDir, 'panel', date, { limit }));
+    }
+
+    if (p === '/api/panel/records') {
+      const date = dateParam(url);
+      if (!date) return json(res, 400, { error: 'date 参数必须是 YYYY-MM-DD' });
+      const limit = clampInt(url.searchParams.get('limit'), 1, 2000, 200);
+      return json(res, 200, readPanelRows(CFG.dataDir, 'panel-records', date, { limit }));
+    }
 
     if (p === '/api/events') {
       const date = dateParam(url);
@@ -192,25 +237,27 @@ const server = http.createServer(async (req, res) => {
       }
       monitor.setInterval(Math.round(sec));
       log(`刷新频率已改为 ${monitor.intervalSec} 秒`);
-      return json(res, 200, { ok: true, intervalSec: monitor.intervalSec, status: monitor.status() });
+      return json(res, 200, { ok: true, intervalSec: monitor.intervalSec, status: statusWithPanel() });
     }
 
     if (p === '/api/refresh' && req.method === 'POST') {
+      // 新面板异步刷新，不阻塞旧监控的“立即刷新”（面板不可用时也不会拖住页面）
+      panel.poll().catch(() => {});
       const r = await monitor.poll();
       if (monitor.running) monitor.reschedule();
-      return json(res, 200, { ...r, status: monitor.status() });
+      return json(res, 200, { ...r, status: statusWithPanel() });
     }
 
     if (p === '/api/start' && req.method === 'POST') {
       monitor.start();
       log('已开始监控');
-      return json(res, 200, { ok: true, running: true, status: monitor.status() });
+      return json(res, 200, { ok: true, running: true, status: statusWithPanel() });
     }
 
     if (p === '/api/stop' && req.method === 'POST') {
       monitor.stop();
       log('已暂停监控');
-      return json(res, 200, { ok: true, running: false, status: monitor.status() });
+      return json(res, 200, { ok: true, running: false, status: statusWithPanel() });
     }
 
     if (p === '/api/export/events.csv') {
@@ -259,14 +306,17 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('SCUM 在线监控已启动');
   console.log(`  控制台: ${link}`);
   console.log(`  刷新间隔: ${monitor.intervalSec} 秒`);
+  console.log(`  新日志面板: ${fs.existsSync(panel.linkFile) ? '已配置' : '未配置（data/panel-link.txt）'}`);
   console.log('  按 Ctrl+C 停止');
   monitor.start();
+  panel.start();
   if (OPEN) exec(`start "" "${link}"`, { shell: 'cmd.exe' });
 });
 
 process.on('SIGINT', () => {
   console.log('\n正在停止...');
   monitor.stop();
+  panel.stop();
   releaseLock(CFG.dataDir);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1500);

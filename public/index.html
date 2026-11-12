@@ -77,8 +77,43 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);background:#1f2634;border:1px solid #33405a;color:#dfe5f1;padding:9px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.25s}
 .toast.show{opacity:1;transform:translateX(-50%)}
 .toast.err{border-color:#7f1d1d;color:#fecaca}
-@media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}}
+/* 新日志面板对照 */
+.compare{margin-bottom:18px}
+.compare h2 .tag{font-style:normal;color:var(--blue);font-size:11.5px;border:1px solid #2b3b5c;background:#162033;border-radius:999px;padding:1px 8px;margin-left:8px}
+.cmp-top{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:13px 16px;border-bottom:1px solid #1c2230}
+.cmp-stat{background:#11151d;border:1px solid #1f2735;border-radius:9px;padding:9px 11px}
+.cmp-stat b{display:block;font-size:20px;line-height:1.25;color:var(--blue);font-variant-numeric:tabular-nums}
+.cmp-stat span{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+.cmp-stat .sub{color:#6f7a90;font-size:11px;margin-top:2px}
+.cmp-stat.up b{color:var(--green)} .cmp-stat.down b{color:var(--red)}
+.cmp-cols{display:grid;grid-template-columns:1fr 1.25fr;gap:0;border-bottom:1px solid #1c2230}
+.cmp-col{padding:12px 16px;min-width:0}
+.cmp-col + .cmp-col{border-left:1px solid #1c2230}
+.cmp-col h3,.cmp-list h3,.cmp-latest h3{font-size:12px;color:#9aa6bd;font-weight:600;margin:0 0 8px;display:flex;justify-content:space-between;gap:8px}
+.cmp-col h3 em,.cmp-list h3 em,.cmp-latest h3 em{font-style:normal;color:#6f7a90;font-weight:400;font-size:11px}
+.cmp-table td,.cmp-table th{padding:6px 8px;font-size:12px}
+.cmp-table td.num{font-variant-numeric:tabular-nums}
+.cmp-table .delta-pos{color:var(--green)} .cmp-table .delta-neg{color:var(--red)}
+.cmp-lists{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #1c2230}
+.cmp-list{padding:12px 16px;min-width:0}
+.cmp-list + .cmp-list{border-left:1px solid #1c2230}
+.cmp-chips{display:flex;flex-wrap:wrap;gap:5px;max-height:128px;overflow:auto}
+.cmp-chip{font-size:11.5px;background:#171d29;border:1px solid #222a3a;border-radius:999px;padding:2px 8px;color:#c3ccdc;white-space:nowrap}
+.cmp-chip small{color:#6f7a90;margin-left:4px;font-size:10.5px}
+.cmp-chip.warn{background:rgba(251,191,36,.10);border-color:#3d3522;color:#fcd34d}
+.cmp-chip.miss{background:rgba(96,165,250,.10);border-color:#24344f;color:#93c5fd}
+.cmp-latest{padding:12px 16px;border-bottom:1px solid #1c2230}
+.cmp-row{display:grid;grid-template-columns:52px 66px 150px 1fr;gap:8px;font-size:12px;padding:4px 0;border-bottom:1px solid #171d27;align-items:baseline}
+.cmp-row:last-child{border-bottom:none}
+.cmp-row time{color:#6f7a90;font-variant-numeric:tabular-nums;font-size:11.5px}
+.cmp-row .who{color:#dfe5f1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmp-row .what{color:#9aa6bd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmp-kind{font-size:11px;border-radius:4px;padding:0 6px;background:#1b2433;color:#9fb0cc;justify-self:start}
+.cmp-foot{padding:9px 16px;color:#6f7a90;font-size:11.5px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between}
+.cmp-off{padding:18px 16px;color:var(--muted);font-size:13px}
+.cmp-off b{color:#c7cedd}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}.cmp-top{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.cmp-top{grid-template-columns:repeat(2,1fr)}.cmp-cols,.cmp-lists{grid-template-columns:1fr}.cmp-col + .cmp-col,.cmp-list + .cmp-list{border-left:none;border-top:1px solid #1c2230}}
 </style>
 </head>
 <body>
@@ -105,6 +140,7 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
     <a class="btn" href="/api/export/events.csv">导出事件 CSV</a>
     <a class="btn" href="/events">历史事件 →</a>
     <a class="btn" href="/data">原始数据 →</a>
+    <a class="btn" href="/panel">新旧对照 →</a>
   </div>
 
   <div class="cards">
@@ -114,6 +150,11 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
     <div class="card"><b id="cRound">0</b><span>累计刷新次数</span></div>
     <div class="card"><b id="cIdle">0</b><span>在榜但无变化</span></div>
   </div>
+
+  <section class="panel compare" id="comparePanel">
+    <h2>新日志监控 · 茶c 控制台 <span class="tag">与旧监控并行对照</span><em id="panelMeta">等待首次抓取…</em></h2>
+    <div id="panelBody"><div class="cmp-off">新日志面板尚未配置。</div></div>
+  </section>
 
   <div class="grid">
     <div>
@@ -219,6 +260,159 @@ function renderEvents(s){
     </div>`).join('');
 }
 
+const signed = (n) => n == null || !Number.isFinite(Number(n)) ? '—' : (Number(n) > 0 ? '+' : '') + Number(n);
+const deltaClass = (n) => n > 0 ? 'delta-pos' : n < 0 ? 'delta-neg' : '';
+function dateTime(v){
+  if (!v) return '—';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function latestPanelRows(panel){
+  const out = [];
+  for (const [key, item] of Object.entries(panel?.logs || {})) {
+    for (const r of (item.latest || []).slice(0, 5)) out.push({ key, label: item.label, r });
+  }
+  out.sort((a, b) => String(b.r.time || '').replace('T', ' ').localeCompare(String(a.r.time || '').replace('T', ' ')));
+  return out.slice(0, 10);
+}
+
+function panelRowText(key, r){
+  if (key === 'kill') {
+    return {
+      who: `${r.killerName || ''} → ${r.victimName || ''}`,
+      what: `${r.weapon || ''} · ${r.region || ''} · ${r.serverDistance ?? '—'} 米`,
+    };
+  }
+  if (key === 'vehicle') {
+    return {
+      who: r.ownerName || r.owner || '—',
+      what: `${r.vehicle || ''}${r.vehicleId ? ' #' + r.vehicleId : ''} · ${r.typeText || r.type || ''} · ${r.region || ''}`,
+    };
+  }
+  if (key === 'admin') {
+    return {
+      who: r.game_name || r.steamId || '—',
+      what: `${r.code || ''}${r.defaultCode ? '（' + r.defaultCode + '）' : ''}`,
+    };
+  }
+  if (key === 'bomb') {
+    return {
+      who: r.name || r.steamid || '—',
+      what: `${r.target || ''} · ${r.isSuccess ? '成功' : '失败'} · ${r.elapsedTime ?? '—'}s · ${r.region || ''}`,
+    };
+  }
+  return {
+    who: r.name || r.steamid || '—',
+    what: `${r.target || ''}${r.lockType ? ' · ' + r.lockType : ''} · ${r.isSuccess ? '成功' : '失败'} · ${r.elapsedTime ?? '—'}s · 房主 ${r.ownerName || '—'}`,
+  };
+}
+
+function renderPanel(s, panel){
+  const body = $('panelBody');
+  if (!panel) {
+    $('panelMeta').textContent = '后端未启用';
+    body.innerHTML = '<div class="cmp-off">后端没有返回新日志面板状态；旧监控不受影响。</div>';
+    return;
+  }
+  if (!panel.configured) {
+    $('panelMeta').textContent = '未配置';
+    body.innerHTML = '<div class="cmp-off">未配置 <b>data/panel-link.txt</b>，新日志面板未启用；旧监控照常运行。</div>';
+    return;
+  }
+  if (panel.online == null) {
+    $('panelMeta').textContent = panel.lastError ? '抓取失败' : '等待首次抓取…';
+    body.innerHTML = `<div class="cmp-off">新日志面板暂不可用${panel.lastError ? `：<b>${esc(panel.lastError)}</b>` : ''}；旧监控不受影响。</div>`;
+    return;
+  }
+
+  const cmp = panel.comparison || {};
+  const old = cmp.old || {};
+  const nw = cmp.new || {};
+  const diff = cmp.diff || {};
+  const details = cmp.details || {};
+  const oldOnline = s.counts.online;
+  const delta = panel.online - oldOnline;
+
+  $('panelMeta').textContent = `新在线 ${panel.online} · 旧在线 ${oldOnline} · 差 ${signed(delta)} · 抓取 ${clock(panel.lastAt)}`;
+
+  const top = `
+    <div class="cmp-stat"><b>${panel.online}</b><span>新面板在线</span><div class="sub">旧监控 ${oldOnline} · 差 ${signed(delta)}</div></div>
+    <div class="cmp-stat"><b>${panel.active24h ?? '—'}</b><span>新面板 24h 活跃</span><div class="sub">旧监控榜上 ${s.counts.total}</div></div>
+    <div class="cmp-stat"><b>${nw.killsToday ?? panel.killsToday ?? '—'}</b><span>今日击杀（新）</span><div class="sub">旧事件 ${old.events?.kill ?? '—'}</div></div>
+    <div class="cmp-stat ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}"><b>${signed(delta)}</b><span>新 − 旧</span><div class="sub">旧含新上榜 / 新为面板总数</div></div>
+    <div class="cmp-stat"><b>${panel.rosterCount ?? '—'}</b><span>新面板在线名单</span><div class="sub">旧判定 ${old.strictOnline ?? s.counts.strictOnline ?? '—'} 人</div></div>`;
+
+  const onlineRows = [
+    ['在线（含新上榜）', old.online ?? oldOnline, panel.online, diff.online],
+    ['仅判定在线', old.strictOnline ?? s.counts.strictOnline, panel.online, diff.strict],
+    ['SCUMSA 显示', old.serverOnline ?? '—', panel.online, diff.server],
+    ['名单人数', Array.isArray(old.names) ? old.names.length : '—', nw.rosterCount ?? panel.rosterCount, null],
+  ].map(([label, a, b, d]) => `<tr><td>${esc(label)}</td><td class="num">${a ?? '—'}</td><td class="num">${b ?? '—'}</td><td class="num ${deltaClass(d)}">${signed(d)}</td></tr>`).join('');
+
+  const logRows = [
+    ['击杀', old.events?.kill, nw.logs?.kill, diff.kill],
+    ['开锁 / 撬锁', old.events?.unlock, nw.logs?.lock, diff.unlock],
+    ['剪线', '—', nw.logs?.bomb, null],
+    ['载具（旧为原始记录）', old.records?.vehicle, nw.logs?.vehicle, diff.recordsVehicle],
+    ['管理命令', '—', nw.logs?.admin, null],
+    ['在线事件', old.events?.online, '—', null],
+  ].map(([label, a, b, d]) => `<tr><td>${esc(label)}</td><td class="num">${a ?? '—'}</td><td class="num">${b ?? '—'}</td><td class="num ${deltaClass(d)}">${signed(d)}</td></tr>`).join('');
+
+  const chips = (arr, cls, fmt) => {
+    if (!arr?.length) return '<span class="cmp-chip">无</span>';
+    return arr.slice(0, 30).map((x) => `<span class="cmp-chip ${cls}">${esc(fmt(x))}</span>`).join('');
+  };
+  const missing = details.missingInOld || [];
+  const extra = details.extraInOld || [];
+
+  const latest = latestPanelRows(panel);
+  const latestHtml = latest.length ? latest.map(({ key, label, r }) => {
+    const t = panelRowText(key, r);
+    return `<div class="cmp-row"><span class="cmp-kind">${esc(label)}</span><time>${esc(evTime(r.time))}</time><span class="who" title="${esc(t.who)}">${esc(t.who)}</span><span class="what" title="${esc(t.what)}">${esc(t.what)}</span></div>`;
+  }).join('') : '<div class="cmp-off">新面板还没有日志记录。</div>';
+
+  body.innerHTML = `
+    <div class="cmp-top">${top}</div>
+    <div class="cmp-cols">
+      <div class="cmp-col">
+        <h3>在线口径对照 <em>旧监控 vs 新面板</em></h3>
+        <table class="cmp-table">
+          <thead><tr><th>指标</th><th>旧</th><th>新</th><th>差</th></tr></thead>
+          <tbody>${onlineRows}</tbody>
+        </table>
+      </div>
+      <div class="cmp-col">
+        <h3>日志对照 <em>今日，口径可能不同</em></h3>
+        <table class="cmp-table">
+          <thead><tr><th>类别</th><th>旧</th><th>新</th><th>差</th></tr></thead>
+          <tbody>${logRows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="cmp-lists">
+      <div class="cmp-list">
+        <h3>新名单里旧监控没识别到 <em>${missing.length} 人</em></h3>
+        <div class="cmp-chips">${chips(missing, 'miss', (x) => `${x.name}${x.region ? ' · ' + x.region : ''}${x.steamid ? ' · ' + String(x.steamid).slice(-4) : ''}`)}</div>
+      </div>
+      <div class="cmp-list">
+        <h3>旧监控在线但新名单没有 <em>${extra.length} 人</em></h3>
+        <div class="cmp-chips">${chips(extra, 'warn', (x) => `${x.name} · ${x.status === 'new' ? '新上榜' : '在线'}`)}</div>
+      </div>
+    </div>
+    <div class="cmp-latest">
+      <h3>新日志最近记录 <em>撬锁 / 剪线 / 击杀 / 载具 / 管理</em></h3>
+      ${latestHtml}
+    </div>
+    <div class="cmp-foot">
+      <span>新面板每 ${Math.round((panel.intervalMs || 120000) / 1000)} 秒抓取 · 上次 ${clock(panel.lastAt)}</span>
+      <span>面板日志最后 ${dateTime(panel.lastLogTime)}${panel.expiresAt ? ' · 账号到期 ' + dateTime(panel.expiresAt) : ''}</span>
+      ${panel.lastError ? `<span style="color:#fca5a5">${esc(panel.lastError)}</span>` : ''}
+    </div>`;
+}
+
 function render(s){
   last = s;
   offset = s.serverNow - Date.now();
@@ -270,6 +464,7 @@ function render(s){
     </tr>`).join('') : '<tr><td colspan="3" class="empty">—</td></tr>';
 
   renderEvents(s);
+  renderPanel(s, s.panel);
 
   const errs = Object.entries(s.extraErrors || {});
   if (errs.length) $('dayLabel').textContent += ' · 部分板块拉取失败';

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新旧监控对照记录</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1016;--panel:#141822;--line:#232a38;--text:#e7eaf0;--muted:#8c95a8;--green:#4ade80;--amber:#fbbf24;--red:#f87171;--blue:#60a5fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 "Microsoft YaHei",system-ui,-apple-system,sans-serif}
+.wrap{max-width:1380px;margin:0 auto;padding:26px 22px 60px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:21px;margin:0 0 6px}
+.meta{color:var(--muted);font-size:12.5px}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px}
+input,select{background:#0f131b;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 9px;font-size:13px}
+button,a.btn{background:#1d2330;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;text-decoration:none;display:inline-block}
+button:hover,a.btn:hover{background:#252d3d}
+button.primary{background:#1d4ed8;border-color:#2563eb}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 16px}
+.card b{display:block;font-size:24px;line-height:1.25;color:var(--blue);font-variant-numeric:tabular-nums}
+.card.green b{color:var(--green)}.card.red b{color:var(--red)}.card.amber b{color:var(--amber)}
+.card span{color:var(--muted);font-size:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel h2{font-size:13.5px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);color:#b9c2d4;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.panel h2 em{font-style:normal;color:var(--muted);font-size:12px;font-weight:400}
+.table-wrap{max-height:68vh;overflow:auto}
+table{width:100%;border-collapse:collapse;white-space:nowrap}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid #1c2230;font-size:12px}
+th{color:var(--muted);font-weight:500;font-size:11.5px;background:#11151d;position:sticky;top:0;z-index:1}
+td.num{font-variant-numeric:tabular-nums;color:#aeb7c8}
+td.pos{color:var(--green)}td.neg{color:var(--red)}
+.empty{padding:26px 16px;color:var(--muted);text-align:center}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1f2634;border:1px solid #33405a;padding:8px 16px;border-radius:9px;opacity:0;transition:.2s;font-size:13px}
+.toast.show{opacity:1}.toast.err{border-color:#7f1d1d;color:#fecaca}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>新旧监控对照记录</h1>
+      <div class="meta">旧监控 1199 · 新面板 茶c · 每 2 分钟一条 · 保留 14 天</div>
+    </div>
+    <a class="btn" href="/">← 返回看板</a>
+  </header>
+
+  <div class="controls">
+    <label>日期</label>
+    <input type="date" id="date">
+    <label>条数</label>
+    <select id="limit">
+      <option value="50">50</option>
+      <option value="200" selected>200</option>
+      <option value="500">500</option>
+      <option value="1000">1000</option>
+    </select>
+    <button class="primary" id="load">查询</button>
+    <span class="meta" id="msg"></span>
+  </div>
+
+  <div class="cards">
+    <div class="card"><b id="cRows">—</b><span>对照记录条数</span></div>
+    <div class="card green"><b id="cNew">—</b><span>最新新面板在线</span></div>
+    <div class="card"><b id="cOld">—</b><span>最新旧监控在线</span></div>
+    <div class="card amber"><b id="cDiff">—</b><span>新 − 旧</span></div>
+    <div class="card red"><b id="cGap">—</b><span>旧监控漏识别人数</span></div>
+  </div>
+
+  <section class="panel">
+    <h2>对照流水 <em id="count"></em></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>时间</th><th>旧在线</th><th>新在线</th><th>差</th>
+          <th>旧仅判定</th><th>新名单</th><th>漏识别</th><th>旧多出</th>
+          <th>旧击杀</th><th>新击杀</th><th>旧开锁</th><th>新撬锁</th>
+          <th>新剪线</th><th>新载具</th><th>新管理</th>
+        </tr></thead>
+        <tbody id="body"><tr><td colspan="15" class="empty">正在加载…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const signed = (n) => n == null || !Number.isFinite(Number(n)) ? '—' : (Number(n) > 0 ? '+' : '') + Number(n);
+const cls = (n) => n > 0 ? 'pos' : n < 0 ? 'neg' : '';
+function toast(msg, err){
+  const t=$('toast'); t.textContent=msg; t.className='toast show'+(err?' err':'');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',2600);
+}
+function localDate(){
+  const d=new Date(); const p=(n)=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+function timeOf(ts){
+  const s=String(ts||''); const m=s.match(/[ T](\d{2}:\d{2}:\d{2})/); return m?m[1]:s.slice(0,19);
+}
+function render(j){
+  const items=j.items||[];
+  $('cRows').textContent=j.total ?? items.length;
+  $('count').textContent=`${j.date||''} · 显示最近 ${items.length} 条 / 共 ${j.total??items.length}`;
+  if(!items.length){
+    $('body').innerHTML='<tr><td colspan="15" class="empty">这一天还没有对照记录（监控未启动或新面板未配置）</td></tr>';
+    return;
+  }
+  const latest=items[0];
+  $('cNew').textContent=latest.new?.online ?? '—';
+  $('cOld').textContent=latest.old?.online ?? '—';
+  $('cDiff').textContent=signed(latest.diff?.online);
+  $('cGap').textContent=(latest.details?.missingInOld||[]).length;
+  $('body').innerHTML=items.map(x=>{
+    const old=x.old||{}, nw=x.new||{}, d=x.diff||{}, det=x.details||{};
+    return `<tr>
+      <td>${esc(timeOf(x.at))}</td>
+      <td class="num">${old.online ?? '—'}</td>
+      <td class="num">${nw.online ?? '—'}</td>
+      <td class="num ${cls(d.online)}">${signed(d.online)}</td>
+      <td class="num">${old.strictOnline ?? '—'}</td>
+      <td class="num">${nw.rosterCount ?? '—'}</td>
+      <td class="num">${(det.missingInOld||[]).length}</td>
+      <td class="num">${(det.extraInOld||[]).length}</td>
+      <td class="num">${old.events?.kill ?? '—'}</td>
+      <td class="num">${nw.logs?.kill ?? '—'}</td>
+      <td class="num">${old.events?.unlock ?? '—'}</td>
+      <td class="num">${nw.logs?.lock ?? '—'}</td>
+      <td class="num">${nw.logs?.bomb ?? '—'}</td>
+      <td class="num">${nw.logs?.vehicle ?? '—'}</td>
+      <td class="num">${nw.logs?.admin ?? '—'}</td>
+    </tr>`;
+  }).join('');
+}
+async function load(){
+  const date=$('date').value||localDate();
+  const limit=$('limit').value||'200';
+  $('msg').textContent='加载中…';
+  try{
+    const r=await fetch(`/api/panel/compare?date=${encodeURIComponent(date)}&limit=${encodeURIComponent(limit)}`,{cache:'no-store'});
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    render(j); $('msg').textContent='';
+  }catch(e){ $('msg').textContent='加载失败：'+e.message; toast(e.message,true); }
+}
+$('date').value=localDate();
+$('load').onclick=load;
+$('date').onchange=load;
+$('limit').onchange=load;
+load();
+</script>
+</body>
+</html>

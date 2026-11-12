@@ -117,6 +117,67 @@ http://127.0.0.1:8788/api/export/events.csv?date=2026-11-10&q=JEFF
 
 注意：这个差值是**近似**的。服务器数来自 Steam 主列表，可能比游戏内晚几十秒；本工具只认得前 30 名，所以差值大不代表有人掉线，只代表榜单外还有人。
 
+**新日志面板（茶c 控制台）的在线数更准**：它直接给出服务器当前在线和完整在线名单，不再受前 30 限制。看板已把新旧两套数据并排展示，并每 2 分钟记录一次差异，见下一节。
+
+## 新日志面板（茶c 控制台）· 新旧并行
+
+看板新增一块「新日志监控 · 茶c 控制台」，和旧监控并排对照；**旧监控的统计逻辑、事件生成、在线判定完全没改**，新面板只读旧监控的 `status()` 做对比。
+
+### 配置
+
+1. 在 `data/panel-link.txt` 里放服主给的免密链接（整行，`https://web-log.chacca.net/#/auth/login?m=...&s=...`）。
+2. 重启监控。
+3. 看板出现「新日志监控 · 茶c 控制台」；未配置时显示提示，旧监控不受影响。
+
+链接本身是**登录凭证**，`data/` 已在 `.gitignore` 里，不要提交、不要发群。面板账号到期时间以面板返回的 `webLogExpireTime` 为准（当前这份到 **2026-11-18 00:00**）。
+
+### 抓取内容与频率
+
+每 **120 秒**抓一次，独立于旧监控的检测频率：
+
+| 数据 | 来源 | 内容 |
+|---|---|---|
+| 在线总览 | `dashboard_overview` | 当前在线、24h 活跃、今日击杀、最后日志时间 |
+| 在线名单 | `online_players` | 全部在线玩家：登录时间、游戏名、SteamID、IP、区域、坐标、机器人/无人机/封禁标记 |
+| 撬锁 | `webLog/serverLog/log` `gamePlay:lockPicking` | 操作人、锁类型、成功/失败、耗时、尝试次数、房主、目标物品+ID、区域+坐标 |
+| 剪线 | `gamePlay:bombFefusalMiniGame` | 操作人、结果、耗时、尝试次数、目标、主人、区域+坐标 |
+| 击杀 | `kill` | 击杀者/受害者 + SteamID、武器、距离、区域、双方坐标、游戏时间、原始 JSON |
+| 载具 | `vehicle:destruction` | 事件类型（消失/损毁/未活动）、车型、载具ID、车主、区域+坐标 |
+| 管理命令 | `admin:command` | 操作人、SteamID、原始指令、中文翻译 |
+
+日志接口统一走 `POST /prod-api/webLog/serverLog/log`，用 `type` 区分；请求/响应 AES 加密，登录用 `m/s` 解出账号密码，再用 RSA 加密随机 `sign` 换 token。
+
+### 看板对照
+
+- **在线**：新面板在线 vs 旧监控 `counts.online`（含新上榜）/ `strictOnline`（仅判定在线）/ SCUMSA
+- **名单**：新名单里旧监控没识别到的人（榜外/基线未判）、旧监控在线但新名单没有的人（旧误判/已下线）
+- **日志**：今日击杀、开锁/撬锁、剪线、载具、管理命令的旧/新条数和差值（口径不同，差值只作参考）
+- **最近记录**：五类新日志的最近 10 条
+
+看板上的「新旧对照 →」或直接打开 **http://127.0.0.1:8788/panel**，可以按日期查历史对照流水：每条记录的时间、旧/新在线、差、漏识别/旧多出人数、旧/新击杀/开锁/剪线/载具/管理条数。
+
+### 落盘文件（保留 14 天）
+
+| 文件 | 内容 |
+|---|---|
+| `data/panel-YYYY-MM-DD.jsonl` | 每轮快照：在线总览、完整在线名单、五类日志今日总数 + 最近 5 条 |
+| `data/panel-records-YYYY-MM-DD.jsonl` | 五类日志的去重原始记录（按类型+时间/玩家/目标等键去重） |
+| `data/compare-YYYY-MM-DD.jsonl` | 每轮新旧对照：两边在线数、名单差集、日志条数差、旧事件/旧原始记录计数 |
+
+`compare-*.jsonl` 是后续调整统计逻辑的主要依据：每一行都有 `old`、`new`、`diff`、`details`、`notes`，时间戳是抓取时间。
+
+### 新面板接口
+
+```text
+GET  /api/panel/status
+POST /api/panel/refresh
+GET  /api/panel/compare?date=2026-11-12&limit=200
+GET  /api/panel/snapshots?date=2026-11-12&limit=100
+GET  /api/panel/records?date=2026-11-12&limit=200
+```
+
+`/api/status` 也会带一个 `panel` 字段，看板就是从这里取的。
+
 ## 判定原理
 
 今日榜接口里有两个字段：
@@ -156,12 +217,14 @@ http://127.0.0.1:8788/api/export/events.csv?date=2026-11-10&q=JEFF
 | `public/index.html` | 网页面板（无外部依赖） |
 | `public/data.html` | 原始数据子页面（无外部依赖） |
 | `public/events.html` | 历史事件子页面（无外部依赖） |
+| `public/panel.html` | 新旧监控对照记录子页面（无外部依赖） |
 | `lib/monitor.mjs` | 监控核心：抓取、比对、状态与事件 |
 | `lib/scum.mjs` | 榜单接口、时长格式化、差异判定 |
 | `lib/sources.mjs` | 击杀 / 开锁 / 封禁 / 地堡 / 载具 / 开关接口 |
 | `lib/records.mjs` | 原始数据落盘、去重、查询与 CSV |
 | `lib/csv.mjs`、`lib/export.mjs` | CSV 转义与事件导出 |
 | `lib/args.mjs` | 命令行参数解析 |
+| `lib/panel.mjs` | 新日志面板：登录/解密、在线与日志抓取、新旧对照、落盘 |
 | `lib/cdp.mjs` | 控制 Chrome 的小工具（登录脚本用） |
 | `login.mjs` / `1-登录.cmd` | 打开独立 Chrome 窗口供手动登录 |
 | `watch.mjs` | 纯命令行版监控（不需要网页时用） |
@@ -172,8 +235,12 @@ http://127.0.0.1:8788/api/export/events.csv?date=2026-11-10&q=JEFF
 | `data/events-*.jsonl` | 完整事件流水（上线/下线/击杀/开锁/榜单/风控），保留 14 天 |
 | `data/records-*.jsonl` | 全部来源的原始记录（去重后） |
 | `data/ranks-*.jsonl` | 每轮 5 个排行榜的完整快照 |
+| `data/panel-*.jsonl` | 新面板每轮快照（在线总览/名单/日志总数） |
+| `data/panel-records-*.jsonl` | 新面板五类日志的去重原始记录 |
+| `data/compare-*.jsonl` | 新旧监控每轮对照与差异 |
+| `data/panel-link.txt` | 新面板免密链接（**登录凭证，勿提交**） |
 
-`events-*.jsonl` / `snapshots-*.jsonl` / `records-*.jsonl` / `ranks-*.jsonl` 默认只保留 **14 天**，启动时会清理更早的文件；旧文件里的坏行会被跳过并计入 `badEventLines`，不会让整份历史事件清空。
+`events-*.jsonl` / `snapshots-*.jsonl` / `records-*.jsonl` / `ranks-*.jsonl` 默认只保留 **14 天**，启动时会清理更早的文件；旧文件里的坏行会被跳过并计入 `badEventLines`，不会让整份历史事件清空。新面板的 `panel-*` / `panel-records-*` / `compare-*` 同样保留 14 天，由新面板自己清理，不改旧监控的清理逻辑。
 
 ## 接口
 
@@ -185,12 +252,18 @@ http://127.0.0.1:8788/api/export/events.csv?date=2026-11-10&q=JEFF
 | POST | `/api/start` / `/api/stop` | 开始 / 暂停 |
 | GET | `/api/export/events.csv` | 导出事件 CSV，支持 `?date=YYYY-MM-DD&category=online&q=JEFF`；非法日期返回 400 |
 | GET | `/events` | 历史事件子页面 |
+| GET | `/panel` | 新旧监控对照记录子页面 |
 | GET | `/api/events` | 历史事件，支持 `?date=&category=&q=&limit=&offset=` |
 | GET | `/data` | 原始数据子页面 |
 | GET | `/api/records/meta` | 各来源条数、排行榜快照数（`?date=YYYY-MM-DD`） |
 | GET | `/api/records` | 原始记录，支持 `?date=&source=&q=&limit=&offset=` |
 | GET | `/api/ranks` | 排行榜快照，支持 `?date=&type=&limit=&offset=` |
 | GET | `/api/records/export.csv` | 导出原始记录 CSV，支持 `?date=&source=&q=` |
+| GET | `/api/panel/status` | 新日志面板状态（在线/名单/五类日志/最近对照） |
+| POST | `/api/panel/refresh` | 立即抓一次新日志面板 |
+| GET | `/api/panel/compare` | 新旧对照记录，支持 `?date=YYYY-MM-DD&limit=200` |
+| GET | `/api/panel/snapshots` | 新面板每轮快照，支持 `?date=&limit=` |
+| GET | `/api/panel/records` | 新面板去重日志记录，支持 `?date=&limit=` |
 
 ## 测试
 
