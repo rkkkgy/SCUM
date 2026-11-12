@@ -394,8 +394,8 @@ function renderPanel(s, panel){
     </div>
     <div class="cmp-lists">
       <div class="cmp-list">
-        <h3>新名单里旧监控没识别到 <em>${missing.length} 人</em></h3>
-        <div class="cmp-chips">${chips(missing, 'miss', (x) => `${x.name}${x.region ? ' · ' + x.region : ''}${x.steamid ? ' · ' + String(x.steamid).slice(-4) : ''}`)}</div>
+        <h3>新名单里旧监控没识别到 <em>${missing.length} 人 · 名字 · 区域 · SteamID 末4位</em></h3>
+        <div class="cmp-chips">${chips(missing, 'miss', (x) => `${x.name}${x.region ? ' · ' + x.region : ''}${x.steamid ? ' · ID…' + String(x.steamid).slice(-4) : ''}`)}</div>
       </div>
       <div class="cmp-list">
         <h3>旧监控在线但新名单没有 <em>${extra.length} 人</em></h3>
