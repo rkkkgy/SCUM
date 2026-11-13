@@ -21,6 +21,14 @@ h1 .dot.paused{background:var(--amber);box-shadow:0 0 0 4px rgba(251,191,36,.14)
 .meta b{color:#c7cedd;font-weight:600}
 .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:18px}
 .controls .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+.db-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#10151e;border:1px solid #1f2735;border-radius:9px;padding:8px 12px;margin:-6px 0 16px;font-size:12px;color:var(--muted)}
+.db-bar b{color:#c7cedd;font-weight:600}
+.db-bar .db-dot{width:7px;height:7px;border-radius:50%;background:#64748b;flex:none}
+.db-bar .db-dot.ok{background:var(--green);box-shadow:0 0 6px rgba(74,222,128,.7)}
+.db-bar .db-dot.work{background:var(--amber)}
+.db-bar .db-dot.err{background:var(--red)}
+.db-bar .db-note{color:#5f6a7e;font-size:11px;margin-left:auto}
+.db-bar button{padding:4px 10px;font-size:11.5px}
 label{color:var(--muted);font-size:13px}
 input[type=number]{width:76px;background:#0f131b;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px}
 button,a.btn{background:#1d2330;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;text-decoration:none;display:inline-block;transition:.15s}
@@ -155,6 +163,13 @@ td.up{color:var(--green);font-variant-numeric:tabular-nums}
     <a class="btn" href="/events">历史事件 →</a>
     <a class="btn" href="/data">原始数据 →</a>
     <a class="btn" href="/panel">新旧对照 →</a>
+  </div>
+
+  <div class="db-bar" id="dbBar">
+    <span class="db-dot" id="dbDot"></span>
+    <span>SQLite 同步：<b id="dbText">等待状态…</b></span>
+    <button id="dbSync">立即同步</button>
+    <span class="db-note" id="dbNote">自动每 5 分钟 · 只导入变化文件</span>
   </div>
 
   <div class="cards">
@@ -481,6 +496,53 @@ function renderPanel(s, panel){
   });
 }
 
+function renderDb(db){
+  const dot = $('dbDot');
+  const text = $('dbText');
+  const btn = $('dbSync');
+  const note = $('dbNote');
+  if (!db) {
+    dot.className = 'db-dot';
+    text.textContent = '后端未启用';
+    btn.disabled = true;
+    note.textContent = '旧监控不受影响';
+    return;
+  }
+  btn.disabled = false;
+  if (!db.available) {
+    dot.className = 'db-dot err';
+    text.textContent = '需要 Node.js 22.5+';
+    btn.disabled = true;
+    note.textContent = '监控仍可用；升级 Node 后自动同步';
+    return;
+  }
+  if (!db.enabled) {
+    dot.className = 'db-dot';
+    text.textContent = '已关闭（SCUM_DB_SYNC=0）';
+    btn.disabled = true;
+    note.textContent = '需要时可手动运行 tools/import-jsonl.mjs';
+    return;
+  }
+  if (db.running) {
+    dot.className = 'db-dot work';
+    text.textContent = '同步中…';
+    btn.disabled = true;
+    note.textContent = `每 ${Math.round((db.intervalSec || 300) / 60)} 分钟自动一次`;
+    return;
+  }
+  if (db.lastError) {
+    dot.className = 'db-dot err';
+    text.textContent = '同步失败';
+    note.textContent = String(db.lastError).slice(0, 120);
+    note.title = db.lastError;
+    return;
+  }
+  dot.className = 'db-dot ok';
+  text.textContent = `上次 ${clock(db.lastSyncAt)} · 下次 ${clock(db.nextSyncAt)}`;
+  note.textContent = `自动每 ${Math.round((db.intervalSec || 300) / 60)} 分钟 · 只导入变化文件`;
+  note.title = db.lastSummary || '';
+}
+
 function render(s){
   last = s;
   offset = s.serverNow - Date.now();
@@ -533,6 +595,7 @@ function render(s){
 
   renderEvents(s);
   renderPanel(s, s.panel);
+  renderDb(s.db);
 
   const errs = Object.entries(s.extraErrors || {});
   if (errs.length) $('dayLabel').textContent += ' · 部分板块拉取失败';
@@ -594,6 +657,23 @@ $('applyInt').onclick = async () => {
     if (j.status) render(j.status);
     toast(`已改为每 ${j.intervalSec} 秒刷新`);
   } catch(e){ toast(e.message, true); }
+};
+
+$('dbSync').onclick = async () => {
+  const b = $('dbSync');
+  b.disabled = true;
+  b.textContent = '同步中…';
+  try {
+    const j = await post('/api/db/sync');
+    if (j.status) renderDb(j.status);
+    toast(j.ok ? 'SQLite 同步完成' : 'SQLite 同步未完成：' + (j.error || '未知错误'), !j.ok);
+  } catch (e) {
+    toast('SQLite 同步失败：' + e.message, true);
+  } finally {
+    b.disabled = false;
+    b.textContent = '立即同步';
+    getStatus().catch(() => {});
+  }
 };
 
 $('intv').addEventListener('input', () => { intvDirty = true; });

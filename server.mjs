@@ -15,6 +15,7 @@ import {
   RECORD_SOURCES, RANK_TYPES, RANK_TYPE_LABEL,
 } from './lib/records.mjs';
 import { PanelMonitor, readPanelRows } from './lib/panel.mjs';
+import { DbSyncService } from './lib/dbsync.mjs';
 
 const args = parseArgs();
 const PORT = Number(args.port || 8788);
@@ -38,9 +39,14 @@ const panel = new PanelMonitor({
   oldStatus: () => monitor.status(),
 });
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('zh-CN', { hour12: false })}]`, ...a);
+// 独立子进程做 JSONL -> SQLite，不让数据库写入阻塞采集
+const dbSync = new DbSyncService({
+  dataDir: CFG.dataDir,
+  logger: { log, warn: (...a) => console.warn('[SQLite]', ...a) },
+});
 
 function statusWithPanel() {
-  return { ...monitor.status(), panel: panel.status() };
+  return { ...monitor.status(), panel: panel.status(), db: dbSync.status() };
 }
 
 monitor.onPoll = (r) => {
@@ -125,6 +131,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/status') return json(res, 200, statusWithPanel());
+
+    if (p === '/api/db/status') return json(res, 200, dbSync.status());
+
+    if (p === '/api/db/sync' && req.method === 'POST') {
+      const r = await dbSync.trigger('manual');
+      return json(res, 200, { ...r, status: dbSync.status() });
+    }
 
     if (p === '/api/panel/status') return json(res, 200, panel.status());
 
@@ -310,6 +323,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('  按 Ctrl+C 停止');
   monitor.start();
   panel.start();
+  dbSync.start();
   if (OPEN) exec(`start "" "${link}"`, { shell: 'cmd.exe' });
 });
 
@@ -317,6 +331,7 @@ process.on('SIGINT', () => {
   console.log('\n正在停止...');
   monitor.stop();
   panel.stop();
+  dbSync.stop();
   releaseLock(CFG.dataDir);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1500);

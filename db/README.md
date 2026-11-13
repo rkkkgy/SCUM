@@ -76,6 +76,10 @@
 
 需要 **Node.js 22.5+**（使用内置 `node:sqlite`；监控本身仍支持 20.11+）。
 
+服务启动后会自动同步：启动约 10 秒先跑一次，之后每 **5 分钟**一次；看板顶部有状态和「立即同步」按钮。自动同步使用独立子进程，不阻塞采集；只重读 SHA 变化的 JSONL。`SCUM_DB_SYNC_SEC` 可改间隔，`SCUM_DB_SYNC=0` 可关闭。
+
+也可以手动执行：
+
 ```bat
 node tools/import-jsonl.mjs
 npm run db:import
@@ -149,7 +153,9 @@ SELECT event_at, killer_name, victim_name, weapon, region, server_distance
 
 ## 保留与备份
 
-- 数据库不会自动删除历史；JSONL 仍按 14 天清理，数据库可以保留更久。
+- 自动同步只追加/更新，不删除行；数据库不会自动清理历史。
+- JSONL 仍按 14 天清理，数据库可以保留更久。
+- 自动同步每 5 分钟读一次变化文件；监控正在追加的末行不完整时会跳过，下次补上。
 - 备份：停止导入后复制 `data/monitor.db`（以及同目录的 `-wal`/`-shm`，如果存在）；或执行 `VACUUM INTO 'monitor-backup.db'`。
 - 不建议在导入过程中直接复制正在写入的数据库文件。
 

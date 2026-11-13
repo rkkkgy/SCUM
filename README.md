@@ -211,7 +211,10 @@ node tools/import-jsonl.mjs --force
 ```
 
 - 幂等：同一文件 SHA-256 会跳过；事实表另有自然唯一键兜底。
-- **数据库不会自动跟随监控更新**，需要在新数据写完后重新执行导入；JSONL 保留 14 天，数据库不会自动删历史。
+- **自动同步**：服务启动后约 10 秒先同步一次，之后每 **5 分钟**同步一次；看板顶部有「SQLite 同步」状态和「立即同步」按钮。
+- 同步只重读 SHA 变化的 JSONL；监控正在追加的末尾半行会跳过，下次同步再补。新数据通常 **5 分钟内**进入数据库。
+- 频率用环境变量 `SCUM_DB_SYNC_SEC` 调整（60–86400 秒）；`SCUM_DB_SYNC=0` 可关闭自动同步，只保留手动命令。
+- 数据库不会自动清理历史；JSONL 仍按 14 天清理，SQLite 可以保留更久。
 - 导入时不要同时复制正在写入的数据库文件；备份用 `VACUUM INTO` 或停写后复制。
 
 ### 表结构
@@ -277,6 +280,7 @@ node tools/import-jsonl.mjs --force
 | `lib/args.mjs` | 命令行参数解析 |
 | `lib/panel.mjs` | 新日志面板：登录/解密、在线与日志抓取、新旧对照、落盘 |
 | `lib/db.mjs` | JSONL -> SQLite 规范化导入 |
+| `lib/dbsync.mjs` | 自动增量同步调度（独立子进程、启动/5 分钟/手动） |
 | `db/schema.sql` | SQLite 表、索引、视图定义 |
 | `db/README.md` | 数据库设计说明与查询示例 |
 | `tools/import-jsonl.mjs` | 数据库导入 CLI（`npm run db:import`） |
@@ -320,6 +324,8 @@ node tools/import-jsonl.mjs --force
 | GET | `/api/panel/compare` | 新旧对照记录，支持 `?date=YYYY-MM-DD&limit=200` |
 | GET | `/api/panel/snapshots` | 新面板每轮快照，支持 `?date=&limit=` |
 | GET | `/api/panel/records` | 新面板去重日志记录，支持 `?date=&limit=` |
+| GET | `/api/db/status` | SQLite 自动同步状态（上次/下次/错误） |
+| POST | `/api/db/sync` | 立即执行一次 JSONL -> SQLite 增量同步 |
 
 ## 测试
 
