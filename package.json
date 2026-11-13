@@ -6,6 +6,8 @@
   "description": "SCUM 1199 服在线排查与数据监控",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "db:import": "node tools/import-jsonl.mjs",
+    "db:import:force": "node tools/import-jsonl.mjs --force"
   }
 }

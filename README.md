@@ -181,6 +181,54 @@ GET  /api/panel/records?date=2026-11-12&limit=200
 
 `/api/status` 也会带一个 `panel` 字段，看板就是从这里取的。
 
+## SQLite 查询库（可选）
+
+JSONL 继续作为监控运行时的第一手数据；另外可以把它们规范化导入 **`data/monitor.db`**，方便用 SQL 做统计、长期留存和后续报表。
+
+```text
+data/monitor.db
+```
+
+### 导入
+
+需要 **Node.js 22.5+**（使用内置 `node:sqlite`；监控本身仍支持 20.11+）：
+
+```bat
+node tools/import-jsonl.mjs
+npm run db:import
+```
+
+指定数据目录 / 数据库：
+
+```bat
+node tools/import-jsonl.mjs --data-dir=D:\SCUM-Monitor\data --db=D:\SCUM-Monitor\data\monitor.db
+```
+
+强制重导（仍靠唯一键去重）：
+
+```bat
+node tools/import-jsonl.mjs --force
+```
+
+- 幂等：同一文件 SHA-256 会跳过；事实表另有自然唯一键兜底。
+- **数据库不会自动跟随监控更新**，需要在新数据写完后重新执行导入；JSONL 保留 14 天，数据库不会自动删历史。
+- 导入时不要同时复制正在写入的数据库文件；备份用 `VACUUM INTO` 或停写后复制。
+
+### 表结构
+
+| 表 / 视图 | 内容 |
+|---|---|
+| `events` / `records` | 旧监控事件流水、原始记录 |
+| `ranking_snapshots` + `rank_entries` | 5 个排行榜快照及榜单行 |
+| `board_snapshots` + `board_entries` | 今日榜原始快照 |
+| `panel_snapshots` + `panel_online_players` | 新面板每轮总览 + 完整在线名单（IP/坐标拆列） |
+| `panel_lock_logs` / `panel_bomb_logs` / `panel_kill_logs` / `panel_vehicle_logs` / `panel_admin_logs` | 五类新面板日志 |
+| `compare_snapshots` + `compare_missing_players` + `compare_extra_players` + `compare_counts` | 新旧对照及差集 |
+| `players` / `player_names` | SteamID 维度、名字历史 |
+| `v_panel_logs` / `v_latest_panel_online` / `v_latest_compare` | 常用查询视图 |
+
+详细设计、索引用途和 SQL 示例见 [`db/README.md`](db/README.md)。当前全部 JSONL 约 2.6 万行，展开排行榜/在线快照后约 125 万行，数据库约 200 MB；占用主要来自 `rank_entries` 的 5 榜历史。
+
 ## 判定原理
 
 今日榜接口里有两个字段：
@@ -228,6 +276,10 @@ GET  /api/panel/records?date=2026-11-12&limit=200
 | `lib/csv.mjs`、`lib/export.mjs` | CSV 转义与事件导出 |
 | `lib/args.mjs` | 命令行参数解析 |
 | `lib/panel.mjs` | 新日志面板：登录/解密、在线与日志抓取、新旧对照、落盘 |
+| `lib/db.mjs` | JSONL -> SQLite 规范化导入 |
+| `db/schema.sql` | SQLite 表、索引、视图定义 |
+| `db/README.md` | 数据库设计说明与查询示例 |
+| `tools/import-jsonl.mjs` | 数据库导入 CLI（`npm run db:import`） |
 | `lib/cdp.mjs` | 控制 Chrome 的小工具（登录脚本用） |
 | `login.mjs` / `1-登录.cmd` | 打开独立 Chrome 窗口供手动登录 |
 | `watch.mjs` | 纯命令行版监控（不需要网页时用） |
@@ -241,6 +293,7 @@ GET  /api/panel/records?date=2026-11-12&limit=200
 | `data/panel-*.jsonl` | 新面板每轮快照（在线总览/名单/日志总数） |
 | `data/panel-records-*.jsonl` | 新面板五类日志的去重原始记录 |
 | `data/compare-*.jsonl` | 新旧监控每轮对照与差异 |
+| `data/monitor.db` | SQLite 查询库（可选导入，约 200 MB） |
 | `data/panel-link.txt` | 新面板免密链接（**登录凭证，勿提交**） |
 
 `events-*.jsonl` / `snapshots-*.jsonl` / `records-*.jsonl` / `ranks-*.jsonl` 默认只保留 **14 天**，启动时会清理更早的文件；旧文件里的坏行会被跳过并计入 `badEventLines`，不会让整份历史事件清空。新面板的 `panel-*` / `panel-records-*` / `compare-*` 同样保留 14 天，由新面板自己清理，不改旧监控的清理逻辑。
